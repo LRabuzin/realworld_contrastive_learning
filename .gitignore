@@ -127,3 +127,18 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+archive/
+
+TAO_frames/
+
+BURST_annotations/
+
+experimental_setup/__pycache__/
+experimental_setup/models/
+
+all_classes_test.json
+all_classes_val.json
+train.json
+
+figures/
