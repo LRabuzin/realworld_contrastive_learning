@@ -134,8 +134,8 @@ TAO_frames/
 
 BURST_annotations/
 
-experimental_setup/__pycache__/
-experimental_setup/models/
+projLib/__pycache__/
+projLib/models/
 
 all_classes_test.json
 all_classes_val.json
