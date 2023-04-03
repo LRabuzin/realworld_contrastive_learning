@@ -140,5 +140,8 @@ projLib/models/
 all_classes_test.json
 all_classes_val.json
 train.json
+categories.json
 
 figures/
+
+models/

@@ -20,8 +20,9 @@ from torchvision import transforms
 from torchvision.models import resnet18
 
 from losses import infonce_loss
-from datasets import RealWorldIdent
+from datasets import RealWorldIdentDataset
 from infinite_iterator import InfiniteIterator
+from pair_constructor import PairConfiguration
 
 def train_step(data, encoder, loss_func, optimizer, params):
 
@@ -89,13 +90,15 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, required=True)
-    parser.add_argument("--image_pairs_train", type=str, required=True)
-    parser.add_argument("--image_pairs_val", type=str, default='')# required=True)
-    parser.add_argument("--image_pairs_test", type=str, default='')# required=True)
+    # parser.add_argument("--image_pairs_train", type=str, required=True)
+    # parser.add_argument("--image_pairs_val", type=str, default='')# required=True)
+    # parser.add_argument("--image_pairs_test", type=str, default='')# required=True)
     parser.add_argument("--model-dir", type=str, default="models")
     parser.add_argument("--model-id", type=str, default=None)
     parser.add_argument("--encoding-size", type=int, default=4)
     parser.add_argument("--hidden-size", type=int, default=100)
+    parser.add_argument("--k", type=int, default=20)
+    parser.add_argument("--n", type=int, default=3)
     parser.add_argument("--tau", type=float, default=1.0)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--batch-size", type=int, default=2)
@@ -119,10 +122,6 @@ def main():
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
 
-    print("Arguments:")
-    for k, v in vars(args).items():
-        print(f"\t{k}: {v}")
-
     if not args.evaluate:
         with open(os.path.join(args.save_dir, 'args.json'), 'w') as fp:
             json.dump(args.__dict__, fp)
@@ -143,8 +142,8 @@ def main():
     loss_func = lambda z1, z2: infonce_loss(
         z1, z2, sim_metric=sim_metric, criterion=criterion, tau=args.tau)
     
-    mean_per_channel = [0.4327, 0.2689, 0.2839]  # values from 3DIdent
-    std_per_channel = [0.1201, 0.1457, 0.1082]   # values from 3DIdent
+    mean_per_channel = [0.485, 0.456, 0.406]  # values from ImageNet
+    std_per_channel = [0.229, 0.224, 0.225]   # values from ImageNet
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean_per_channel, std_per_channel)])
@@ -155,10 +154,18 @@ def main():
         "num_workers": args.workers, "pin_memory": True}
     
     # define dataloaders
-    train_dataset = RealWorldIdent(args.data_dir, args.image_pairs_train, **dataset_kwargs)
+    train_annotations = os.path.join(args.data_dir, "train.json")
+    val_annotations = os.path.join(args.data_dir, "val.json")
+    test_annotations = os.path.join(args.data_dir, "test.json")
+    categories = os.path.join(args.data_dir, "categories.json")
+    train_config = PairConfiguration(train_annotations, categories, k=args.k, n=args.n)
+    val_config = PairConfiguration(val_annotations, categories, k=args.k, n=args.n)
+    test_config = PairConfiguration(test_annotations, categories, k=args.k, n=args.n)
+
+    train_dataset = RealWorldIdentDataset(args.data_dir, train_config.sample_pairs(), **dataset_kwargs)
     if args.evaluate:
-        val_dataset = RealWorldIdent(args.data_dir, args.image_pairs_val, **dataset_kwargs)
-        test_dataset = RealWorldIdent(args.data_dir, args.image_pairs_test, **dataset_kwargs)
+        val_dataset = RealWorldIdentDataset(args.data_dir, val_config.sample_pairs(), **dataset_kwargs)
+        test_dataset = RealWorldIdentDataset(args.data_dir, test_config.sample_pairs(), **dataset_kwargs)
     else:
         train_loader = DataLoader(train_dataset, **dataloader_kwargs)
         train_iterator = InfiniteIterator(train_loader)
@@ -249,20 +256,22 @@ def main():
         # print(test_labels)
         # print("*********************")
 
-        acc_logreg, acc_mlp = [np.nan] * 2
+        # acc_logreg, acc_mlp = [np.nan] * 2
 
-        # logistic classification
-        logreg = LogisticRegression(n_jobs=-1, max_iter=1000)
-        acc_logreg = evaluate_prediction(logreg, accuracy_score, *data)
+        # # logistic classification
+        # logreg = LogisticRegression(n_jobs=-1, max_iter=1000)
+        # acc_logreg = evaluate_prediction(logreg, accuracy_score, *data)
         # nonlinear classification
-        mlpreg = MLPClassifier(max_iter=1000)
-        acc_mlp = evaluate_prediction(mlpreg, accuracy_score, *data)
+
+        for category in train_config.categories:
+            mlpreg = MLPClassifier(max_iter=1000)
+            acc_mlp = evaluate_prediction(mlpreg, accuracy_score, *data)
 
         # append results
-        results.append([acc_logreg, acc_mlp])
+        results.append([acc_mlp])
 
         # convert evaluation results into tabular form
-        columns = ["acc_logreg", "acc_mlp"]
+        columns = ["acc_mlp"]
         df_results = pd.DataFrame(results, columns=columns)
         df_results.to_csv(os.path.join(args.save_dir, "results.csv"))
         print(df_results.to_string())
