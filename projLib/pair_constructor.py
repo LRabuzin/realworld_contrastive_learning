@@ -12,25 +12,34 @@ from utils import find_occurences
 
 class PairConfiguration:
     def __init__(self,
-            label_json_path: str,
+            label_json_paths: list[str],
             categories_json_path: str,
             count_instances: bool = False,
             k: Optional[int] = None,
             n: Optional[int] = None,
-            class_restriction: Optional[set[int]] = None
+            content_categories: Optional[Iterable[int]] = None,
+            style_categories: Optional[Iterable[int]] = None
     ) -> None:
-        self.label_json_path = label_json_path
+        self.label_json_paths = label_json_paths
         self.k = k
         self.n = n
         self.count_instances = count_instances
-        self.class_restriction = class_restriction
         
         self.categories_json_path = categories_json_path
         self.categories_decoder = self._load_categories()
 
         self.raw_labels, self.categories = self._load_labels()
 
-        self.content_categories, self.style_categories = self._find_content_and_style_categories()
+        if content_categories is None and style_categories is None:
+            self.content_categories, self.style_categories = self._find_content_and_style_categories()
+        elif content_categories is not None and style_categories is not None:
+            self.content_categories, self.style_categories = np.array(list(content_categories)), np.array(list(style_categories))
+        else:
+            print("content")
+            print(content_categories)
+            print("style")
+            print(style_categories)
+            raise RuntimeError("Content and style categories aren't both set.")
 
         self.valid_labels = self._filter_labels()
 
@@ -52,28 +61,34 @@ class PairConfiguration:
         return df
     
     def _load_labels(self) -> Tuple[pd.DataFrame, list[int]]:
-        with open(self.label_json_path,'r') as f:
-            data = json.loads(f.read())
-        df_freeform = pd.json_normalize(data, record_path =['sequences'])
+        all_dfs = []
+        all_categories = []
+        for label_path in self.label_json_paths:
+            with open(label_path,'r') as f:
+                data = json.loads(f.read())
+            df_freeform = pd.json_normalize(data, record_path =['sequences'])
 
-        df_freeform = df_freeform.explode(['annotated_image_paths','segmentations'])
-        df_freeform = df_freeform.reset_index(drop=True)
+            df_freeform = df_freeform.explode(['annotated_image_paths','segmentations'])
+            df_freeform = df_freeform.reset_index(drop=True)
 
-        def discover_image_categories(row):
-            track_to_category = {}
-            for i in range(1,11):
-                if row[f"track_category_ids.{i}"] == row[f"track_category_ids.{i}"]:
-                    track_to_category[i] = row[f"track_category_ids.{i}"]
-            categories = []
-            for key in row["segmentations"]:
-                categories.append(track_to_category[int(key)])
-            return categories
+            def discover_image_categories(row):
+                track_to_category = {}
+                n_tracks = len(list(filter(lambda t: "track_category_ids." in t, df_freeform.columns)))
+                for i in range(1, n_tracks+1):
+                    if row[f"track_category_ids.{i}"] == row[f"track_category_ids.{i}"]:
+                        track_to_category[i] = row[f"track_category_ids.{i}"]
+                categories = []
+                for key in row["segmentations"]:
+                    categories.append(track_to_category[int(key)])
+                return categories
 
-        df_freeform["list_object"]=df_freeform.apply(discover_image_categories, axis=1)
+            df_freeform["list_object"]=df_freeform.apply(discover_image_categories, axis=1)
 
-        categories=list(itertools.chain.from_iterable(list(df_freeform["list_object"].values)))
+            all_categories.extend(list(itertools.chain.from_iterable(list(df_freeform["list_object"].values))))
+            all_dfs.append(df_freeform)
 
-        return df_freeform, categories
+        final_df = pd.concat(all_dfs, axis=0, ignore_index=True)
+        return final_df, all_categories
 
     
     def _load_categories(self) -> Dict[int, str]:
@@ -108,7 +123,7 @@ class PairConfiguration:
             return self.raw_labels
     
     def _map_content_combinations_to_images(self) -> Dict[frozenset[int], list[str]]:
-        self.valid_labels["content_combo"] = self.valid_labels["list_object"].apply(lambda x: frozenset(filter(lambda t: t in self.content_categories, x)))
+        self.valid_labels.loc[:,"content_combo"] = self.valid_labels["list_object"].apply(lambda x: frozenset(filter(lambda t: t in self.content_categories, x)))
         combo_to_image = {}
         for _, row in self.valid_labels.iterrows():
             combo_to_image.setdefault(row["content_combo"], []).append(os.path.join(row["dataset"], row["seq_name"], row["annotated_image_paths"]))

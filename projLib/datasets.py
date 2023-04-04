@@ -9,7 +9,14 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
     """Pytorch Dataset used for fetching real world data from the TAO dataset
     according to a given partitioning per latents
     """
-    def __init__(self, data_dir : str, image_pairs: pd.DataFrame, has_labels: bool = True, transform: Optional[torch.nn.Module] = None, keep_in_memory: bool = True) -> None:
+    def __init__(self,
+                 data_dir : str,
+                 image_pairs: pd.DataFrame,
+                 partition: str = "train",
+                 has_labels: bool = True,
+                 transform: Optional[torch.nn.Module] = None,
+                 keep_in_memory: bool = True,
+                 ava_and_hacs_present: bool = False) -> None:
         """Initializes the instance based on the given image pairs and transform
 
         The expected format of the image pair file is a csv file containing
@@ -31,16 +38,19 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
         self.has_labels = has_labels
         self.transform = transform
         self.keep_in_memory = keep_in_memory
+        self.ava_and_hacs_present = ava_and_hacs_present
 
         if self.keep_in_memory:
             self.images1 = []
             self.images2 = []
-            for i, row in image_pairs.iterrows:
-                self.images1.append(pil_loader(os.path.join(self.data_dir, row["image1"])))
-                self.images2.append(pil_loader(os.path.join(self.data_dir, row["image2"])))
+            for i, row in image_pairs.iterrows():
+                if not self.ava_and_hacs_present and ("HACS" in row["image1"] or "AVA" in row["image1"] or "HACS" in row["image2"] or "AVA" in row["image2"]):
+                    continue
+                self.images1.append(pil_loader(os.path.join(self.data_dir,"TAO_frames", "frames", partition, row["image1"])))
+                self.images2.append(pil_loader(os.path.join(self.data_dir,"TAO_frames", "frames", partition, row["image2"])))
     
     def __len__(self) -> int:
-        return len(self.image_pairs)
+        return len(self.images1)
     
     def __getitem__(self, idx: int) -> Dict[str, Image.Image|Optional[str]]:
         if self.keep_in_memory:
@@ -64,6 +74,6 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
         return {
             "image1": image_1,
             "image2": image_2,
-            "content": z
+            "content": list(z)
         }
     
