@@ -11,7 +11,7 @@ import torch
 from sklearn.metrics import accuracy_score
 from sklearn.neural_network import MLPClassifier
 from torch.nn.utils import clip_grad_norm_
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
 from torchvision.models import resnet34
 
@@ -148,21 +148,14 @@ def main():
     val_annotations = os.path.join(args.data_dir, "val.json")
     test_annotations = os.path.join(args.data_dir, "test.json")
     categories = os.path.join(args.data_dir, "categories.json")
-    train_config = PairConfiguration([train_annotations], categories, k=args.k, n=args.n)
+    config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=args.n)
+    dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(), **dataset_kwargs)
+    content_categories = config.content_categories
 
-    content_categories = train_config.content_categories
-    style_categories = train_config.style_categories
+    train_dataset, val_dataset, test_dataset = random_split(dataset, [0.6, 0.2, 0.2])
 
-    val_config = PairConfiguration([val_annotations], categories, k=args.k, n=args.n, content_categories=content_categories, style_categories=style_categories, partition="val") #change file and add partition arg
-    test_config = PairConfiguration([test_annotations], categories, k=args.k, n=args.n, content_categories=content_categories, style_categories=style_categories, partition="test") #change file and add partition arg
-
-    train_dataset = RealWorldIdentDataset(args.data_dir, train_config.sample_pairs(), **dataset_kwargs)
-    if args.evaluate:
-        val_dataset = RealWorldIdentDataset(args.data_dir, val_config.sample_pairs(), **dataset_kwargs)
-        test_dataset = RealWorldIdentDataset(args.data_dir, test_config.sample_pairs(), **dataset_kwargs)
-    else:
-        train_loader = DataLoader(train_dataset, **dataloader_kwargs)
-        train_iterator = InfiniteIterator(train_loader)
+    train_loader = DataLoader(train_dataset, **dataloader_kwargs)
+    train_iterator = InfiniteIterator(train_loader)
     
     # define encoder
     encoder = torch.nn.Sequential(
