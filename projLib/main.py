@@ -20,6 +20,8 @@ from datasets import RealWorldIdentDataset
 from infinite_iterator import InfiniteIterator
 from pair_constructor import PairConfiguration
 
+from tqdm import tqdm
+
 def train_step(data, encoder, loss_func, optimizer, params):
     if optimizer is not None:
         optimizer.zero_grad()
@@ -91,9 +93,9 @@ def parse_args():
     parser.add_argument("--tau", type=float, default=1.0)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--train-steps", type=int, default=100000)
+    parser.add_argument("--train-steps", type=int, default=500000)
     parser.add_argument("--log-steps", type=int, default=10)
-    parser.add_argument("--checkpoint-steps", type=int, default=10000)
+    parser.add_argument("--checkpoint-steps", type=int, default=100000)
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--seed", type=int, default=np.random.randint(32**2-1))
     parser.add_argument("--workers", type=int, default=4)
@@ -148,7 +150,7 @@ def main():
     val_annotations = os.path.join(args.data_dir, "val.json")
     test_annotations = os.path.join(args.data_dir, "test.json")
     categories = os.path.join(args.data_dir, "categories.json")
-    config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=args.n)
+    config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=list(range(1, args.n)))
     dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(), **dataset_kwargs)
     content_categories = config.content_categories
 
@@ -176,22 +178,24 @@ def main():
     if not args.evaluate:
         step = 1
         loss_values = []
-        while (step <= args.train_steps):
+        with tqdm(total=args.train_steps) as pbar:
+            while (step <= args.train_steps):
 
-            data = next(train_iterator)
-            loss_value = train_step(data, encoder, loss_func, optimizer, params)
-            loss_values.append(loss_value)
+                data = next(train_iterator)
+                loss_value = train_step(data, encoder, loss_func, optimizer, params)
+                loss_values.append(loss_value)
 
-            if step % args.log_steps == 1 or step == args.train_steps:
-                print(f"Step: {step} \t",
-                      f"Loss: {loss_value:.4f} \t",
-                      f"<Loss>: {np.mean(loss_values[-args.log_steps:]):.4f} \t")
+                if step % args.log_steps == 1 or step == args.train_steps:
+                    print(f"Step: {step} \t",
+                        f"Loss: {loss_value:.4f} \t",
+                        f"<Loss>: {np.mean(loss_values[-args.log_steps:]):.4f} \t")
 
-            if step % args.checkpoint_steps == 1 or step == args.train_steps:
-                torch.save(encoder.state_dict(), os.path.join(args.save_dir, f"encoder_{step}.pt"))
-                if args.save_all_checkpoints:
+                if step % args.checkpoint_steps == 1 or step == args.train_steps:
                     torch.save(encoder.state_dict(), os.path.join(args.save_dir, f"encoder_{step}.pt"))
-            step += 1
+                    if args.save_all_checkpoints:
+                        torch.save(encoder.state_dict(), os.path.join(args.save_dir, f"encoder_{step}.pt"))
+                step += 1
+                pbar.update(1)
     else:
         val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories)
         test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories)
