@@ -26,7 +26,7 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
 
         Args:
         data_dir: directory_containing images
-        image_pairs_filepath: path to file containing image pair locations
+        image_pairs: path to file containing image pair locations
         has_labels: boolean indicating whether the dataset contains labels
         transform: torchvision.transforms Transform
         keep_in_memory: boolean indicating whether the images should be
@@ -39,6 +39,7 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
         self.transform = transform
         self.keep_in_memory = keep_in_memory
         self.ava_and_hacs_present = ava_and_hacs_present
+        self.labels=[]
 
         if self.keep_in_memory:
             self.images1 = []
@@ -48,6 +49,7 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
                     continue
                 self.images1.append(pil_loader(os.path.join(self.data_dir,"TAO_frames", "frames", partition, row["image1"])))
                 self.images2.append(pil_loader(os.path.join(self.data_dir,"TAO_frames", "frames", partition, row["image2"])))
+                self.labels.append(row["content"])
     
     def __len__(self) -> int:
         return len(self.images1)
@@ -67,7 +69,7 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
             image_2 = self.transform(image_2)
 
         if self.has_labels:
-            z = self.image_pairs['content'][idx]
+            z = self.labels[idx]
         else:
             z = None
 
