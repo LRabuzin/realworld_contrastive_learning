@@ -42,8 +42,8 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
             self.images1 = []
             self.images2 = []
             for i, row in image_pairs.iterrows():
-                self.images1.append(pil_loader(os.path.join(self.data_dir,"TAO_frames", "frames", row["image1"])))
-                self.images2.append(pil_loader(os.path.join(self.data_dir,"TAO_frames", "frames", row["image2"])))
+                self.images1.append(pil_loader(os.path.join(self.data_dir, row["image1"])))
+                self.images2.append(pil_loader(os.path.join(self.data_dir, row["image2"])))
                 self.labels.append(row["content"])
     
     def __len__(self) -> int:
