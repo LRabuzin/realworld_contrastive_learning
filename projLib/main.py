@@ -4,6 +4,7 @@ import os
 import random
 import uuid
 import warnings
+import math
 
 import numpy as np
 import pandas as pd
@@ -156,7 +157,15 @@ def main():
     dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(), keep_in_memory=keep_in_memory, **dataset_kwargs)
     content_categories = config.content_categories
 
-    train_dataset, val_dataset, test_dataset = random_split(dataset, [0.6, 0.2, 0.2])
+    train_len = math.floor(0.6*len(dataset))
+    val_len = math.floor(0.2*len(dataset))
+    test_len = math.floor(0.2*len(dataset))
+
+    leftover_len = len(dataset) - train_len - val_len - test_len
+
+    val_len += leftover_len
+
+    train_dataset, val_dataset, test_dataset = random_split(dataset, [train_len, val_len, test_len])
 
     train_loader = DataLoader(train_dataset, **dataloader_kwargs)
     train_iterator = InfiniteIterator(train_loader)
