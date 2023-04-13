@@ -167,6 +167,9 @@ def main():
 
     train_dataset, val_dataset, test_dataset = random_split(dataset, [train_len, val_len, test_len])
 
+    print(train_dataset[0])
+    print(train_dataset[1])
+
     train_loader = DataLoader(train_dataset, **dataloader_kwargs)
     train_iterator = InfiniteIterator(train_loader)
     
