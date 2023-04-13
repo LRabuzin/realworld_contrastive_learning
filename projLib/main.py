@@ -101,6 +101,7 @@ def parse_args():
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--no-cuda", action="store_true")
     parser.add_argument("--save-all-checkpoints", action="store_true")
+    parser.add_argument("--load-from-memory", action="store_true")
     args = parser.parse_args()
     return args, parser
 
@@ -151,7 +152,8 @@ def main():
     test_annotations = os.path.join(args.data_dir, "test.json")
     categories = os.path.join(args.data_dir, "categories.json")
     config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=list(range(1, args.n)))
-    dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(), **dataset_kwargs)
+    keep_in_memory = not args.load_from_memory
+    dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(), keep_in_memory=keep_in_memory, **dataset_kwargs)
     content_categories = config.content_categories
 
     train_dataset, val_dataset, test_dataset = random_split(dataset, [0.6, 0.2, 0.2])
