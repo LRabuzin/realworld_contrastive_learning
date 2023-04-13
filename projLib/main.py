@@ -55,7 +55,7 @@ def val_step(data, encoder, loss_func):
 
 def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories):
     encoder.eval()
-    loader = DataLoader(dataset, **dataloader_kwargs)
+    loader = DataLoader(dataset, collate_fn=lambda x: x, **dataloader_kwargs)
     rdict = {"hz_image_1": [], "hz_image_2": [],"loss_values": [], "labels": []}
     labels_dict = {category:[] for category in content_categories}
 
@@ -170,7 +170,7 @@ def main():
     print(train_dataset[0])
     print(train_dataset[1])
 
-    train_loader = DataLoader(train_dataset, **dataloader_kwargs)
+    train_loader = DataLoader(train_dataset, collate_fn = lambda x: x, **dataloader_kwargs)
     train_iterator = InfiniteIterator(train_loader)
     
     # define encoder
