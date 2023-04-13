@@ -48,7 +48,7 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
             self.labels.append(row["content"])
     
     def __len__(self) -> int:
-        return len(self.images1)
+        return len(self.labels)
     
     def __getitem__(self, idx: int) -> Dict[str, Image.Image|Optional[str]]:
         if self.keep_in_memory:
