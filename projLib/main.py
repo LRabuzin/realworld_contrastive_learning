@@ -23,6 +23,17 @@ from pair_constructor import PairConfiguration
 
 from tqdm import tqdm
 
+def collate_fn(batch):
+        image1 = torch.stack([sample["image1"] for sample in batch])
+        image2 = torch.stack([sample["image2"] for sample in batch])
+        content = torch.stack([sample["content"] for sample in batch])
+
+        return {
+            "image1": image1,
+            "image2": image2,
+            "content": content
+            }
+
 def train_step(data, encoder, loss_func, optimizer, params):
     if optimizer is not None:
         optimizer.zero_grad()
@@ -55,7 +66,7 @@ def val_step(data, encoder, loss_func):
 
 def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories):
     encoder.eval()
-    loader = DataLoader(dataset, collate_fn=lambda x: x, **dataloader_kwargs)
+    loader = DataLoader(dataset, collate_fn=collate_fn, **dataloader_kwargs)
     rdict = {"hz_image_1": [], "hz_image_2": [],"loss_values": [], "labels": []}
     labels_dict = {category:[] for category in content_categories}
 
@@ -167,10 +178,8 @@ def main():
 
     train_dataset, val_dataset, test_dataset = random_split(dataset, [train_len, val_len, test_len])
 
-    train_loader = DataLoader(train_dataset, collate_fn = lambda x: x, **dataloader_kwargs)
+    train_loader = DataLoader(train_dataset, collate_fn = collate_fn, **dataloader_kwargs)
     train_iterator = InfiniteIterator(train_loader)
-
-    print(next(train_iterator))
     
     # define encoder
     encoder = torch.nn.Sequential(
