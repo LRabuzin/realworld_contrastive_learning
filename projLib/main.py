@@ -26,7 +26,7 @@ from tqdm import tqdm
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
         image2 = torch.stack([sample["image2"] for sample in batch])
-        content = torch.stack([sample["content"] for sample in batch])
+        content = [sample["content"] for sample in batch]
 
         return {
             "image1": image1,
