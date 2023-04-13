@@ -60,9 +60,8 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
             image_2_path = self.image_pairs['image2'][idx]
             image_2 = pil_loader(os.path.join(self.data_dir, image_2_path))
 
-        if self.transform is not None:
-            image_1 = self.transform(image_1)
-            image_2 = self.transform(image_2)
+        image_1 = self.transform(image_1)
+        image_2 = self.transform(image_2)
 
         if self.has_labels:
             z = self.labels[idx]
