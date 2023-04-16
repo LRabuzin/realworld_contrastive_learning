@@ -102,6 +102,7 @@ def parse_args():
     parser.add_argument("--hidden-size", type=int, default=100)
     parser.add_argument("--k", type=int, default=20)
     parser.add_argument("--n", type=int, default=3)
+    parser.add_argument("--leq-content-factors", action="store_true")
     parser.add_argument("--tau", type=float, default=1.0)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--batch-size", type=int, default=32)
@@ -163,7 +164,11 @@ def main():
     val_annotations = os.path.join(args.data_dir, "val.json")
     test_annotations = os.path.join(args.data_dir, "test.json")
     categories = os.path.join(args.data_dir, "categories.json")
-    config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=list(range(1, args.n)))
+    if args.leq_content_factors:
+        ns = list(range(1, args.n+1))
+    else:
+        ns = [args.n]
+    config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=ns)
     keep_in_memory = not args.load_from_memory
     dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(), keep_in_memory=keep_in_memory, **dataset_kwargs)
     content_categories = config.content_categories
