@@ -22,6 +22,7 @@ from infinite_iterator import InfiniteIterator
 from pair_constructor import PairConfiguration
 
 from tqdm import tqdm
+import wandb
 
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
@@ -142,6 +143,12 @@ def main():
         device = "cpu"
         warnings.warn("cuda is not available or --no-cuda was set.")
 
+    run = wandb.init(
+        project="realworld-blockident",
+        name=args.model_id,
+        config=vars(args),
+        tags=["baseline_encoding", "rn18"],)
+
     sim_metric = torch.nn.CosineSimilarity(dim=-1)
     criterion = torch.nn.CrossEntropyLoss()
     loss_func = lambda z1, z2: infonce_loss(
@@ -194,6 +201,8 @@ def main():
     encoder = torch.nn.DataParallel(encoder)
     encoder.to(device)
 
+    wandb.watch(encoder, loss_func, 'all', 200)
+
     # for evaluation, always load saved encoders
     if args.evaluate:
         path_encoder = os.path.join(args.save_dir, "encoder.pt")
@@ -213,6 +222,10 @@ def main():
                 loss_values.append(loss_value)
 
                 if step % args.log_steps == 1 or step == args.train_steps:
+                    wandb.log({
+                        "train/iteration": step,
+                        "train/loss": loss_value,
+                    })
                     print(f"Step: {step} \t",
                         f"Loss: {loss_value:.4f} \t",
                         f"<Loss>: {np.mean(loss_values[-args.log_steps:]):.4f} \t")
@@ -223,6 +236,7 @@ def main():
                         torch.save(encoder.state_dict(), os.path.join(args.save_dir, f"encoder_{step}.pt"))
                 step += 1
                 pbar.update(1)
+            wandb.log_artifact(encoder)
     else:
         val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories)
         test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories)
