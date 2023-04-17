@@ -260,6 +260,8 @@ def main():
         intermediates = []
         raw_predictions = {}
         for category in content_categories:
+            print("evaluating category:")
+            print(category)
             mlpreg = MLPClassifier(max_iter=1000, batch_size=args.batch_size)
             acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category])
             intermediates.append(acc_mlp)
