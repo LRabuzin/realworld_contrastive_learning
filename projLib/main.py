@@ -9,7 +9,7 @@ import math
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from sklearn.neural_network import MLPClassifier
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, random_split
@@ -262,8 +262,13 @@ def main():
         test_labels = {category: np.concatenate((test_dict["labels"][category], test_dict["labels"][category])) for category in content_categories}
         data = [train_inputs, train_labels, test_inputs, test_labels]
 
-        intermediates = []
+        accuracies = ["acc"]
+        precisions = ["prec"]
+        recalls = ["recall"]
+        f1s = ["f1"]
+        roc_aucs = ["roc_auc"]
         raw_predictions = {}
+        raw_labels = {}
         for category in content_categories:
             print("evaluating category:")
             print(category)
@@ -273,17 +278,32 @@ def main():
             print(np.shape(data[3][category]))
             mlpreg = MLPClassifier(max_iter=1000, batch_size=args.batch_size)
             acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category])
-            intermediates.append(acc_mlp)
+            accuracies.append(acc_mlp)
             raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
+            raw_labels[category] = data[3][category]
+            precisions.append(precision_score(raw_labels[category], raw_predictions[category]))
+            recalls.append(recall_score(raw_labels[category], raw_predictions[category]))
+            f1s.append(f1_score(raw_labels[category], raw_predictions[category]))
+            roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
+
+
 
         with open(os.path.join(args.save_dir, 'raw_preds.json'), 'w') as fp:
             json.dump(raw_predictions, fp)
+        with open(os.path.join(args.save_dir, 'raw_labels.json'), 'w') as fp:
+            json.dump(raw_labels, fp)
+        
+
         
         # append results
-        results.append(intermediates)
+        results.append(accuracies)
+        results.append(precisions)
+        results.append(recalls)
+        results.append(f1s)
+        results.append(roc_aucs)
 
         # convert evaluation results into tabular form
-        columns = [f"acc_{int(category)}" for category in content_categories]
+        columns = ["metric"] + [f"{int(category)}" for category in content_categories]
         df_results = pd.DataFrame(results, columns=columns)
         df_results.to_csv(os.path.join(args.save_dir, "results.csv"))
         print(df_results.to_string())
