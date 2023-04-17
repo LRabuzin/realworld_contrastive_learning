@@ -101,6 +101,7 @@ def parse_args():
     parser.add_argument("--model-id", type=str, default=None)
     parser.add_argument("--encoding-size", type=int, default=20)
     parser.add_argument("--hidden-size", type=int, default=100)
+    parser.add_argument("--encoder-number", type=int, default=100000)
     parser.add_argument("--k", type=int, default=20)
     parser.add_argument("--n", type=int, default=3)
     parser.add_argument("--leq-content-factors", action="store_true")
@@ -205,7 +206,7 @@ def main():
 
     # for evaluation, always load saved encoders
     if args.evaluate:
-        path_encoder = os.path.join(args.save_dir, "encoder.pt")
+        path_encoder = os.path.join(args.save_dir, f"encoder_{args.encoder_number}.pt")
         encoder.load_state_dict(torch.load(path_encoder, map_location=device))
 
     params = list(encoder.parameters())
