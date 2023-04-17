@@ -280,7 +280,7 @@ def main():
             acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category])
             accuracies.append(acc_mlp)
             raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
-            raw_labels[category] = data[3][category]
+            raw_labels[category] = [int(label) for label in data[3][category]]
             precisions.append(precision_score(raw_labels[category], raw_predictions[category]))
             recalls.append(recall_score(raw_labels[category], raw_predictions[category]))
             f1s.append(f1_score(raw_labels[category], raw_predictions[category]))
