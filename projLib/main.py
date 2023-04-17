@@ -284,7 +284,10 @@ def main():
             precisions.append(precision_score(raw_labels[category], raw_predictions[category]))
             recalls.append(recall_score(raw_labels[category], raw_predictions[category]))
             f1s.append(f1_score(raw_labels[category], raw_predictions[category]))
-            roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
+            if max(raw_labels[category]) == min(raw_labels[category]):
+                roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
+            else:
+                roc_aucs.append(-1)
 
 
 
