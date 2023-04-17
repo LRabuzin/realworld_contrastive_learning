@@ -262,6 +262,10 @@ def main():
         for category in content_categories:
             print("evaluating category:")
             print(category)
+            print(np.shape(data[0]))
+            print(np.shape(data[1][category]))
+            print(np.shape(data[2]))
+            print(np.shape(data[3][category]))
             mlpreg = MLPClassifier(max_iter=1000, batch_size=args.batch_size)
             acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category])
             intermediates.append(acc_mlp)
