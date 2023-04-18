@@ -187,9 +187,9 @@ def main():
     dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(), keep_in_memory=keep_in_memory, **dataset_kwargs)
     content_categories = config.content_categories
 
-    train_len = math.floor(0.6*len(dataset))
-    val_len = math.floor(0.2*len(dataset))
-    test_len = math.floor(0.2*len(dataset))
+    train_len = math.floor(0*len(dataset))#change
+    val_len = math.floor(0.5*len(dataset))#change
+    test_len = math.floor(0.5*len(dataset))#change
 
     leftover_len = len(dataset) - train_len - val_len - test_len
 
