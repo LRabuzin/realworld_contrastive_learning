@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from utils import find_occurences
+from .utils import find_occurences
 
 class PairConfiguration:
     def __init__(self,

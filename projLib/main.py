@@ -103,6 +103,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--model-dir", type=str, default="models")
+    parser.add_argument("--var-name", type=str, default="")
     parser.add_argument("--model-id", type=str, default=None)
     parser.add_argument("--encoding-size", type=int, default=20)
     parser.add_argument("--hidden-size", type=int, default=100)
@@ -291,9 +292,9 @@ def main():
 
 
 
-        with open(os.path.join(args.save_dir, 'raw_preds.json'), 'w') as fp:
+        with open(os.path.join(args.save_dir, f'raw_preds{args.var_name}.json'), 'w') as fp:
             json.dump(raw_predictions, fp)
-        with open(os.path.join(args.save_dir, 'raw_labels.json'), 'w') as fp:
+        with open(os.path.join(args.save_dir, f'raw_labels{args.var_name}.json'), 'w') as fp:
             json.dump(raw_labels, fp)
         
 
@@ -308,7 +309,7 @@ def main():
         # convert evaluation results into tabular form
         columns = ["metric"] + [f"{int(category)}" for category in content_categories]
         df_results = pd.DataFrame(results, columns=columns)
-        df_results.to_csv(os.path.join(args.save_dir, "results.csv"))
+        df_results.to_csv(os.path.join(args.save_dir, f"results{args.var_name}.csv"))
         print(df_results.to_string())
 
 
