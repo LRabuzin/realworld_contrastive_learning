@@ -271,6 +271,8 @@ def main():
         raw_predictions = {}
         raw_labels = {}
         for category in content_categories:
+            if len(data[0]) == 0 or len(data[2]) == 0:
+                continue
             print("evaluating category:")
             print(category)
             print(np.shape(data[0]))
