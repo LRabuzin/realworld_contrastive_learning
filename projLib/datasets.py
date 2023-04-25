@@ -60,9 +60,9 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
             image_2 = self.images2[idx]
         else:
             image_1_path = self.image_pairs['image1'][idx]
-            image_1 = pil_loader(os.path.join(self.data_dir, image_1_path))
+            image_1 = self.transform(pil_loader(os.path.join(self.data_dir, image_1_path)))
             image_2_path = self.image_pairs['image2'][idx]
-            image_2 = pil_loader(os.path.join(self.data_dir, image_2_path))
+            image_2 = self.transform(pil_loader(os.path.join(self.data_dir, image_2_path)))
 
         # image_1 = self.transform(image_1)
         # image_2 = self.transform(image_2)
