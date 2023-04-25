@@ -239,6 +239,15 @@ def plot_distribution_of_number_of_content_combinations(config: PairConfiguratio
     ax.axes.xaxis.set_visible(False)
     plt.show()
 
+def get_distribution_of_style_classes(config, stratum=0):
+    valid_labels = config.valid_labels[config.valid_labels["stratum"] == stratum]
+    style_classes = list(itertools.chain.from_iterable(list(valid_labels["list_object"].apply(lambda x: list(set(filter(lambda t: t in config.style_categories, x)))))))
+    unique_style, frequencies = np.unique(style_classes, return_counts=True)
+    order=np.argsort(frequencies)
+
+    unique_style = unique_style[order]
+    return unique_style
+
 def plot_distribution_of_style_classes(config, stratum=0):
     valid_labels = config.valid_labels[config.valid_labels["stratum"] == stratum]
     style_classes = list(itertools.chain.from_iterable(list(valid_labels["list_object"].apply(lambda x: list(set(filter(lambda t: t in config.style_categories, x)))))))

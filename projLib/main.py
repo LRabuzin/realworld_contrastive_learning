@@ -19,7 +19,7 @@ from torchvision.models import resnet18
 from losses import infonce_loss
 from datasets import RealWorldIdentDataset
 from infinite_iterator import InfiniteIterator
-from pair_constructor import PairConfiguration
+from pair_constructor import PairConfiguration, get_distribution_of_style_classes
 
 from tqdm import tqdm
 import wandb
@@ -28,11 +28,15 @@ def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
         image2 = torch.stack([sample["image2"] for sample in batch])
         content = [sample["content"] for sample in batch]
+        style1 = [sample["style1"] for sample in batch]
+        style2 = [sample["style2"] for sample in batch]
 
         return {
             "image1": image1,
             "image2": image2,
-            "content": content
+            "content": content,
+            "style1": style1,
+            "style2": style2
             }
 
 def train_step(data, encoder, loss_func, optimizer, params):
@@ -65,7 +69,7 @@ def val_step(data, encoder, loss_func):
     return train_step(data, encoder, loss_func, optimizer=None, params=None)
 
 
-def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories):
+def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories):
     encoder.eval()
     loader = DataLoader(dataset, collate_fn=collate_fn, **dataloader_kwargs)
     rdict = {"hz_image_1": [], "hz_image_2": [],"loss_values": [], "labels": []}
@@ -89,6 +93,11 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories)
                 # print(np.shape(data["content"]))
                 # zipped_content = zip(*[list(content) for content in data["content"]])
                 labels_dict[category].extend([1 if category in content else 0 for content in data["content"]])
+            for style_category in style_categories:
+                labels_dict[style_category].extend([1 if category in content else 0 for content in data["style1"]])
+        for data in loader:
+            for style_category in style_categories:
+                labels_dict[style_category].extend([1 if category in content else 0 for content in data["style2"]])
     rdict['labels'] = labels_dict
     return rdict
 
@@ -116,7 +125,8 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--train-steps", type=int, default=25000)
     parser.add_argument("--log-steps", type=int, default=10)
-    parser.add_argument("--checkpoint-steps", type=int, default=100000)
+    parser.add_argument("--val-steps", type=int, default=1000)
+    parser.add_argument("--checkpoint-steps", type=int, default=5000)
     parser.add_argument("--evaluate", action='store_true')
     parser.add_argument("--seed", type=int, default=np.random.randint(32**2-1))
     parser.add_argument("--workers", type=int, default=4)
@@ -189,7 +199,11 @@ def main():
     test_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(2), keep_in_memory=keep_in_memory, **dataset_kwargs)
     heldout_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(3), keep_in_memory=keep_in_memory, **dataset_kwargs)
     content_categories = config.content_categories
-
+    style_categories = config.style_categories
+    shared_style_categories = list(set(get_distribution_of_style_classes(config, 0))
+                                   .intersection(get_distribution_of_style_classes(config, 1))
+                                   .intersection(get_distribution_of_style_classes(config, 2))
+                                   .intersection(get_distribution_of_style_classes(config, 3)))
     # train_len = math.floor(0.1*len(dataset))#change
     # val_len = math.floor(0.4*len(dataset))#change
     # test_len = math.floor(0.4*len(dataset))#change
@@ -202,6 +216,8 @@ def main():
 
     train_loader = DataLoader(train_dataset, collate_fn = collate_fn, **dataloader_kwargs)
     train_iterator = InfiniteIterator(train_loader)
+
+    val_loader = DataLoader(val_dataset, collate_fn = collate_fn, **dataloader_kwargs)
     
     # define encoder
     encoder = torch.nn.Sequential(
@@ -225,8 +241,10 @@ def main():
     if not args.evaluate:
         step = 1
         loss_values = []
+        val_loss_values = []
+        stop_flag = False
         with tqdm(total=args.train_steps) as pbar:
-            while (step <= args.train_steps):
+            while (step <= args.train_steps and not stop_flag):
 
                 data = next(train_iterator)
                 loss_value = train_step(data, encoder, loss_func, optimizer, params)
@@ -234,23 +252,39 @@ def main():
 
                 if step % args.log_steps == 1 or step == args.train_steps:
                     wandb.log({
-                        "train/iteration": step,
                         "train/loss": loss_value,
                     })
                     print(f"Step: {step} \t",
                         f"Loss: {loss_value:.4f} \t",
                         f"<Loss>: {np.mean(loss_values[-args.log_steps:]):.4f} \t")
+                    
+                if step % args.val_steps == 1 or step == args.train_steps:
+                    val_loss = 0
+                    for data in val_loader:
+                        val_loss += val_step(data, encoder, loss_func)
+                    val_loss /= len(val_loader)
+                    val_loss_values.append(val_loss)
+                    wandb.log({
+                        "val/loss": val_loss,
+                    })
+                    print(f"Step: {step} \t",
+                        f"Val Loss: {loss_value:.4f} \t")
+                    if len(val_loss_values) >= 5:
+                        if val_loss_values[-5] - val_loss_values[-1] < 0.05:
+                            stop_flag=True
+                            print("Stopping model early")
 
-                if step % args.checkpoint_steps == 1 or step == args.train_steps:
+
+                if step % args.checkpoint_steps == 1 or step == args.train_steps or stop_flag:
                     torch.save(encoder.state_dict(), os.path.join(args.save_dir, f"encoder_{step}.pt"))
-                    if args.save_all_checkpoints:
-                        torch.save(encoder.state_dict(), os.path.join(args.save_dir, f"encoder_{step}.pt"))
+                if args.save_all_checkpoints:
+                    torch.save(encoder.state_dict(), os.path.join(args.save_dir, f"encoder_{step}.pt"))
                 step += 1
                 pbar.update(1)
             wandb.log_artifact(encoder)
     else:
-        val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories)
-        test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories)
+        val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
+        test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
         print(val_dict)
         print("*************")
         print(test_dict)
@@ -265,6 +299,8 @@ def main():
         test_inputs = np.concatenate((test_dict[f"hz_image_1"], test_dict[f"hz_image_2"]))
         train_labels = {category: np.concatenate((val_dict["labels"][category], val_dict["labels"][category])) for category in content_categories}
         test_labels = {category: np.concatenate((test_dict["labels"][category], test_dict["labels"][category])) for category in content_categories}
+        train_labels = train_labels | {category: val_dict["labels"][category] for category in style_categories}
+        test_labels = train_labels | {category: test_dict["labels"][category] for category in style_categories}
         data = [train_inputs, train_labels, test_inputs, test_labels]
 
         accuracies = ["acc"]
@@ -281,6 +317,32 @@ def main():
             if len(data[0]) == 0 or len(data[2]) == 0:
                 continue
             print("evaluating category:")
+            print(category)
+            print(np.shape(data[0]))
+            print(np.shape(data[1][category]))
+            print(np.shape(data[2]))
+            print(np.shape(data[3][category]))
+            mlpreg = MLPClassifier(max_iter=1000, batch_size=args.batch_size)
+            acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category])
+            accuracies.append(acc_mlp)
+            raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
+            raw_labels[category] = [int(label) for label in data[3][category]]
+            precisions.append(precision_score(raw_labels[category], raw_predictions[category]))
+            recalls.append(recall_score(raw_labels[category], raw_predictions[category]))
+            f1s.append(f1_score(raw_labels[category], raw_predictions[category]))
+            balanced_accs.append(balanced_accuracy_score(raw_labels[category], raw_predictions[category]))
+            class_freq.append(sum(raw_labels[category]))
+            if max(raw_labels[category]) != min(raw_labels[category]):
+                roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
+                prec, recall, _ = precision_recall_curve(raw_labels[category], raw_predictions[category])
+                prc_aucs.append(auc(prec, recall))
+            else:
+                roc_aucs.append(-1)
+                prc_aucs.append(-1)
+        for category in shared_style_categories:
+            if len(data[0]) == 0 or len(data[2]) == 0:
+                continue
+            print("evaluating style category:")
             print(category)
             print(np.shape(data[0]))
             print(np.shape(data[1][category]))
@@ -323,7 +385,7 @@ def main():
         results.append(class_freq)
 
         # convert evaluation results into tabular form
-        columns = ["metric"] + [f"{int(category)}" for category in content_categories]
+        columns = ["metric"] + [f"{int(category)}" for category in content_categories] + [f"{int(category)}" for category in style_categories]
         df_results = pd.DataFrame(results, columns=columns)
         df_results.to_csv(os.path.join(args.save_dir, f"results{args.var_name}.csv"))
         print(df_results.to_string())
