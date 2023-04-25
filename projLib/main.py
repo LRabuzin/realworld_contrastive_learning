@@ -74,6 +74,7 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
     loader = DataLoader(dataset, collate_fn=collate_fn, **dataloader_kwargs)
     rdict = {"hz_image_1": [], "hz_image_2": [],"loss_values": [], "labels": []}
     labels_dict = {category:[] for category in content_categories}
+    labels_dict = {category:[] for category in style_categories}
 
     with torch.no_grad():
         for data in loader:  # NOTE: can yield slightly too many samples
