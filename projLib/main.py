@@ -336,7 +336,7 @@ def main():
             if max(raw_labels[category]) != min(raw_labels[category]):
                 roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
                 prec, recall, _ = precision_recall_curve(raw_labels[category], raw_predictions[category])
-                prc_aucs.append(auc(prec, recall))
+                prc_aucs.append(auc(recall, prec))
             else:
                 roc_aucs.append(-1)
                 prc_aucs.append(-1)
@@ -362,9 +362,10 @@ def main():
             if max(raw_labels[category]) != min(raw_labels[category]):
                 roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
                 prec, recall, _ = precision_recall_curve(raw_labels[category], raw_predictions[category])
-                prc_aucs.append(auc(prec, recall))
+                prc_aucs.append(auc(recall, prec))
             else:
                 roc_aucs.append(-1)
+                prc_aucs.append(-1)
 
 
 
