@@ -271,10 +271,10 @@ def main():
                     })
                     print(f"Step: {step} \t",
                         f"Val Loss: {loss_value:.4f} \t")
-                    if len(val_loss_values) >= 5:
-                        if val_loss_values[-5] - val_loss_values[-1] < 0.05:
-                            stop_flag=True
-                            print("Stopping model early")
+                    # if len(val_loss_values) >= 5:
+                    #     if val_loss_values[-5] - val_loss_values[-1] < 0.05:
+                    #         stop_flag=True
+                    #         print("Stopping model early")
 
 
                 if step % args.checkpoint_steps == 1 or step == args.train_steps or stop_flag:
