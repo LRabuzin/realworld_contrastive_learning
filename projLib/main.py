@@ -214,11 +214,11 @@ def main():
     # val_len += leftover_len
 
     # train_dataset, val_dataset, test_dataset = random_split(dataset, [train_len, val_len, test_len])
+    if not args.evaluate:
+        train_loader = DataLoader(train_dataset, collate_fn = collate_fn, **dataloader_kwargs)
+        train_iterator = InfiniteIterator(train_loader)
 
-    train_loader = DataLoader(train_dataset, collate_fn = collate_fn, **dataloader_kwargs)
-    train_iterator = InfiniteIterator(train_loader)
-
-    val_loader = DataLoader(val_dataset, collate_fn = collate_fn, **dataloader_kwargs)
+        val_loader = DataLoader(val_dataset, collate_fn = collate_fn, **dataloader_kwargs)
     
     # define encoder
     encoder = torch.nn.Sequential(
