@@ -387,7 +387,7 @@ def main():
         results.append(class_freq)
 
         # convert evaluation results into tabular form
-        columns = ["metric"] + [f"{int(category)}" for category in content_categories] + [f"{int(category)}" for category in style_categories]
+        columns = ["metric"] + [f"{int(category)}" for category in content_categories] + [f"{int(category)}" for category in shared_style_categories]
         df_results = pd.DataFrame(results, columns=columns)
         df_results.to_csv(os.path.join(args.save_dir, f"results{args.var_name}.csv"))
         print(df_results.to_string())
