@@ -239,12 +239,12 @@ def main():
     params = list(encoder.parameters())
     optimizer = torch.optim.Adam(params, lr=args.lr)
 
-    torch.backends.cudnn.benchmark = True
     if not args.evaluate:
         step = 1
         loss_values = []
         val_loss_values = []
         stop_flag = False
+        torch.backends.cudnn.benchmark = True
         with tqdm(total=args.train_steps) as pbar:
             while (step <= args.train_steps and not stop_flag):
 
@@ -286,9 +286,9 @@ def main():
     else:
         val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
         test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
-        print(val_dict)
-        print("*************")
-        print(test_dict)
+        # print(val_dict)
+        # print("*************")
+        # print(test_dict)
 
         print(f"<Val Loss>: {np.mean(val_dict['loss_values']):.4f}")
         print(f"<Test Loss>: {np.mean(test_dict['loss_values']):.4f}")
@@ -301,7 +301,7 @@ def main():
         train_labels = {category: np.concatenate((val_dict["labels"][category], val_dict["labels"][category])) for category in content_categories}
         test_labels = {category: np.concatenate((test_dict["labels"][category], test_dict["labels"][category])) for category in content_categories}
         train_labels = train_labels | {category: val_dict["labels"][category] for category in style_categories}
-        test_labels = train_labels | {category: test_dict["labels"][category] for category in style_categories}
+        test_labels = test_labels | {category: test_dict["labels"][category] for category in style_categories}
         data = [train_inputs, train_labels, test_inputs, test_labels]
 
         accuracies = ["acc"]
