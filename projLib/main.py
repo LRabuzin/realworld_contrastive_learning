@@ -37,7 +37,7 @@ def collate_fn(batch):
 
 def train_step(data, encoder, loss_func, optimizer, params):
     if optimizer is not None:
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         encoder.train()
     else:
         encoder.eval()
@@ -107,14 +107,14 @@ def parse_args():
     parser.add_argument("--model-id", type=str, default=None)
     parser.add_argument("--encoding-size", type=int, default=20)
     parser.add_argument("--hidden-size", type=int, default=100)
-    parser.add_argument("--encoder-number", type=int, default=100000)
+    parser.add_argument("--encoder-number", type=int, default=25000)
     parser.add_argument("--k", type=int, default=20)
     parser.add_argument("--n", type=int, default=3)
     parser.add_argument("--leq-content-factors", action="store_true")
     parser.add_argument("--tau", type=float, default=1.0)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--train-steps", type=int, default=500000)
+    parser.add_argument("--train-steps", type=int, default=25000)
     parser.add_argument("--log-steps", type=int, default=10)
     parser.add_argument("--checkpoint-steps", type=int, default=100000)
     parser.add_argument("--evaluate", action='store_true')
@@ -209,7 +209,7 @@ def main():
         torch.nn.LeakyReLU(),
         torch.nn.Linear(args.hidden_size, args.encoding_size))
     encoder = torch.nn.DataParallel(encoder)
-    encoder.to(device)
+    encoder.to(device, non_blocking=True)
 
     wandb.watch(encoder, loss_func, 'all', 200)
 
@@ -221,6 +221,7 @@ def main():
     params = list(encoder.parameters())
     optimizer = torch.optim.Adam(params, lr=args.lr)
 
+    torch.backends.cudnn.benchmark = True
     if not args.evaluate:
         step = 1
         loss_values = []
