@@ -194,7 +194,8 @@ def main():
         ns = [args.n]
     config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=ns)
     keep_in_memory = not args.load_from_memory
-    train_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(0), keep_in_memory=keep_in_memory, **dataset_kwargs)
+    if not args.evaluate:
+        train_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(0), keep_in_memory=keep_in_memory, **dataset_kwargs)
     val_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(1), keep_in_memory=keep_in_memory, **dataset_kwargs)
     test_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(2), keep_in_memory=keep_in_memory, **dataset_kwargs)
     heldout_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(3), keep_in_memory=keep_in_memory, **dataset_kwargs)
@@ -281,7 +282,6 @@ def main():
                     torch.save(encoder.state_dict(), os.path.join(args.save_dir, f"encoder_{step}.pt"))
                 step += 1
                 pbar.update(1)
-            wandb.log_artifact(encoder)
     else:
         val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
         test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
