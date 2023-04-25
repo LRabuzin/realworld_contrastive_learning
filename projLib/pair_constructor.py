@@ -10,6 +10,15 @@ import matplotlib.pyplot as plt
 
 from utils import find_occurences
 
+score_to_stratum={
+    1:0,
+    2:3,
+    3:1,
+    4:0,
+    5:2,
+    6:0
+}
+
 class PairConfiguration:
     def __init__(self,
             label_json_paths: list[str],
@@ -19,7 +28,9 @@ class PairConfiguration:
             n: Optional[Union[int, list[int]]] = None,
             content_categories: Optional[Iterable[int]] = None,
             style_categories: Optional[Iterable[int]] = None,
-            prefixes: list[str] = ["train", "val", "test"]
+            prefixes: list[str] = ["train", "val", "test"],
+            nstrata: int = 4,
+            strata_weights: tuple[float,float,float,float] = (3,1,1,1)
     ) -> None:
         self.label_json_paths = label_json_paths
         self.k = k
@@ -33,6 +44,9 @@ class PairConfiguration:
         
         self.categories_json_path = categories_json_path
         self.categories_decoder = self._load_categories()
+
+        self.nstrata = nstrata
+        self.strata_weights = strata_weights
 
         self.raw_labels, self.categories = self._load_labels()
 
@@ -51,9 +65,9 @@ class PairConfiguration:
 
         self.combo_to_image = self._map_content_combinations_to_images()
 
-    def sample_pairs(self):
+    def sample_pairs(self, stratum = 0):
         data = []
-        for content_combo, images in self.combo_to_image.items():
+        for content_combo, images in self.combo_to_image[stratum].items():
             if len(images) < 2:
                 continue
             current_images = images.copy()
@@ -61,9 +75,9 @@ class PairConfiguration:
             for image_i in range(0, len(current_images), 2):
                 if image_i == len(current_images) -1:
                     continue
-                row = [current_images[image_i], current_images[image_i+1], content_combo]
+                row = [current_images[image_i][0], current_images[image_i+1][0], content_combo, current_images[image_i][1], current_images[image_i+1][1]]
                 data.append(row)
-        df = pd.DataFrame(columns=["image1", "image2", "content"], data=data)
+        df = pd.DataFrame(columns=["image1", "image2", "content", "style1", "style2"], data=data)
         return df
     
     def _load_labels(self) -> Tuple[pd.DataFrame, list[int]]:
@@ -73,6 +87,19 @@ class PairConfiguration:
             with open(label_path,'r') as f:
                 data = json.loads(f.read())
             df_freeform = pd.json_normalize(data, record_path =['sequences'])
+
+            def determine_stratum(row):
+                total = sum(self.strata_weights)
+                row_score = row.name % total + 1
+                return score_to_stratum[row_score]
+                # running_sum = 0
+                # for i, weight in enumerate(self.strata_weights):
+                #     running_sum += weight
+                #     if row_score <= running_sum:
+                #         return i
+                raise RuntimeError("Something wrong with strata selection")
+
+            df_freeform["stratum"] = df_freeform.apply(determine_stratum, axis = 1)
 
             df_freeform = df_freeform.explode(['annotated_image_paths','segmentations'])
             df_freeform = df_freeform.reset_index(drop=True)
@@ -131,9 +158,10 @@ class PairConfiguration:
     
     def _map_content_combinations_to_images(self) -> Dict[frozenset[int], list[str]]:
         self.valid_labels.loc[:,"content_combo"] = self.valid_labels["list_object"].apply(lambda x: frozenset(filter(lambda t: t in self.content_categories, x)))
-        combo_to_image = {}
+        self.valid_labels.loc[:,"style_combo"] = self.valid_labels["list_object"].apply(lambda x: frozenset(filter(lambda t: t in self.style_categories, x)))
+        combo_to_image = {stratum:{} for stratum in range(self.nstrata)}
         for _, row in self.valid_labels.iterrows():
-            combo_to_image.setdefault(row["content_combo"], []).append(os.path.join(row["prefix"], row["dataset"], row["seq_name"], row["annotated_image_paths"]))
+            combo_to_image[int(row["stratum"])].setdefault(row["content_combo"], []).append((os.path.join(row["prefix"], row["dataset"], row["seq_name"], row["annotated_image_paths"]), row["style_combo"]))
         return combo_to_image
     
 
@@ -146,11 +174,12 @@ def num_sampled_pairs(config: PairConfiguration) -> int:
     df = config.sample_pairs()
     return len(df)
 
-def plot_distribution_of_content_classes(config: PairConfiguration, log_scale = False):
+def plot_distribution_of_content_classes(config: PairConfiguration, log_scale = False, stratum = 0):
     content_categories = config.content_categories
     category_frequencies = []
+    valid_labels = config.valid_labels[config.valid_labels["stratum"] == stratum]
     for category in content_categories:
-        contains = config.valid_labels["content_combo"].apply(lambda t: category in t)
+        contains = valid_labels["content_combo"].apply(lambda t: category in t)
         category_frequencies.append(int(contains.sum()))
     
     order=np.argsort(category_frequencies)
@@ -182,10 +211,10 @@ def plot_distribution_of_number_of_content_objects(config: PairConfiguration):
     plt.show()
 
 
-def plot_distribution_of_number_of_content_combinations(config: PairConfiguration, emphasize_class: float = None):
-    combos = list(config.combo_to_image.keys())
+def plot_distribution_of_number_of_content_combinations(config: PairConfiguration, emphasize_class: float = None, stratum = 0):
+    combos = list(config.combo_to_image[stratum].keys())
     print(len(combos))
-    frequencies = [len(value) for value in config.combo_to_image.values()]
+    frequencies = [len(value) for value in config.combo_to_image[stratum].values()]
     
     zipped = list(zip(combos, frequencies))
     
@@ -210,8 +239,9 @@ def plot_distribution_of_number_of_content_combinations(config: PairConfiguratio
     ax.axes.xaxis.set_visible(False)
     plt.show()
 
-def plot_distribution_of_style_classes(config):
-    style_classes = list(itertools.chain.from_iterable(list(config.valid_labels["list_object"].apply(lambda x: list(set(filter(lambda t: t in config.style_categories, x)))))))
+def plot_distribution_of_style_classes(config, stratum=0):
+    valid_labels = config.valid_labels[config.valid_labels["stratum"] == stratum]
+    style_classes = list(itertools.chain.from_iterable(list(valid_labels["list_object"].apply(lambda x: list(set(filter(lambda t: t in config.style_categories, x)))))))
     unique_style, frequencies = np.unique(style_classes, return_counts=True)
 
     order=np.argsort(frequencies)

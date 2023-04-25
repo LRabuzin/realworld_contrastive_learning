@@ -9,7 +9,7 @@ import math
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, balanced_accuracy_score, precision_recall_curve, auc
 from sklearn.neural_network import MLPClassifier
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, random_split
@@ -184,18 +184,21 @@ def main():
         ns = [args.n]
     config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=ns)
     keep_in_memory = not args.load_from_memory
-    dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(), keep_in_memory=keep_in_memory, **dataset_kwargs)
+    train_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(0), keep_in_memory=keep_in_memory, **dataset_kwargs)
+    val_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(1), keep_in_memory=keep_in_memory, **dataset_kwargs)
+    test_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(2), keep_in_memory=keep_in_memory, **dataset_kwargs)
+    heldout_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(3), keep_in_memory=keep_in_memory, **dataset_kwargs)
     content_categories = config.content_categories
 
-    train_len = math.floor(0.1*len(dataset))#change
-    val_len = math.floor(0.4*len(dataset))#change
-    test_len = math.floor(0.4*len(dataset))#change
+    # train_len = math.floor(0.1*len(dataset))#change
+    # val_len = math.floor(0.4*len(dataset))#change
+    # test_len = math.floor(0.4*len(dataset))#change
 
-    leftover_len = len(dataset) - train_len - val_len - test_len
+    # leftover_len = len(dataset) - train_len - val_len - test_len
 
-    val_len += leftover_len
+    # val_len += leftover_len
 
-    train_dataset, val_dataset, test_dataset = random_split(dataset, [train_len, val_len, test_len])
+    # train_dataset, val_dataset, test_dataset = random_split(dataset, [train_len, val_len, test_len])
 
     train_loader = DataLoader(train_dataset, collate_fn = collate_fn, **dataloader_kwargs)
     train_iterator = InfiniteIterator(train_loader)
@@ -268,6 +271,9 @@ def main():
         recalls = ["recall"]
         f1s = ["f1"]
         roc_aucs = ["roc_auc"]
+        balanced_accs = ["balanced_acc"]
+        prc_aucs = ["prc_auc"]
+        class_freq = ["class_freq"]
         raw_predictions = {}
         raw_labels = {}
         for category in content_categories:
@@ -287,8 +293,12 @@ def main():
             precisions.append(precision_score(raw_labels[category], raw_predictions[category]))
             recalls.append(recall_score(raw_labels[category], raw_predictions[category]))
             f1s.append(f1_score(raw_labels[category], raw_predictions[category]))
+            balanced_accs.append(balanced_accuracy_score(raw_labels[category], raw_predictions[category]))
+            class_freq.append(sum(raw_labels[category]))
             if max(raw_labels[category]) != min(raw_labels[category]):
                 roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
+                prec, recall, _ = precision_recall_curve(raw_labels[category], raw_predictions[category])
+                prc_aucs.append(auc(prec, recall))
             else:
                 roc_aucs.append(-1)
 
@@ -307,6 +317,9 @@ def main():
         results.append(recalls)
         results.append(f1s)
         results.append(roc_aucs)
+        results.append(balanced_accs)
+        results.append(prc_aucs)
+        results.append(class_freq)
 
         # convert evaluation results into tabular form
         columns = ["metric"] + [f"{int(category)}" for category in content_categories]

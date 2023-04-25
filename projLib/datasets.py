@@ -37,6 +37,8 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
         self.transform = transform
         self.keep_in_memory = keep_in_memory
         self.labels=[]
+        self.styles1 = []
+        self.styles2 = []
 
         if self.keep_in_memory:
             self.images1 = []
@@ -46,6 +48,8 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
                 self.images2.append(self.transform(pil_loader(os.path.join(self.data_dir, row["image2"]))))
         for i, row in image_pairs.iterrows():
             self.labels.append(row["content"])
+            self.styles1.append(row["style1"])
+            self.styles2.append(row["style2"])
     
     def __len__(self) -> int:
         return len(self.labels)
@@ -68,9 +72,14 @@ class RealWorldIdentDataset(torch.utils.data.Dataset):
         else:
             z = None
 
+        s1 = self.styles1[idx]
+        s2 = self.styles2[idx]
+
         return {
             "image1": image_1,
             "image2": image_2,
-            "content": list(z)
+            "content": list(z),
+            "style1": s1,
+            "style2": s2
         }
     
