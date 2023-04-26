@@ -340,7 +340,7 @@ def main():
             else:
                 roc_aucs.append(-1)
                 prc_aucs.append(-1)
-        for category in shared_style_categories:
+        for category in style_categories:
             if len(data[0]) == 0 or len(data[2]) == 0:
                 continue
             print("evaluating style category:")
@@ -387,7 +387,7 @@ def main():
         results.append(class_freq)
 
         # convert evaluation results into tabular form
-        columns = ["metric"] + [f"{int(category)}" for category in content_categories] + [f"{int(category)}" for category in shared_style_categories]
+        columns = ["metric"] + [f"{int(category)}" for category in content_categories] + [f"{int(category)}" for category in style_categories]
         df_results = pd.DataFrame(results, columns=columns)
         df_results.to_csv(os.path.join(args.save_dir, f"results{args.var_name}.csv"))
         print(df_results.to_string())
