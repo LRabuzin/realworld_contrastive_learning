@@ -95,10 +95,10 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
                 # zipped_content = zip(*[list(content) for content in data["content"]])
                 labels_dict[category].extend([1 if category in content else 0 for content in data["content"]])
             for style_category in style_categories:
-                labels_dict[style_category].extend([1 if category in content else 0 for content in data["style1"]])
+                labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style1"]])
         for data in loader:
             for style_category in style_categories:
-                labels_dict[style_category].extend([1 if category in content else 0 for content in data["style2"]])
+                labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style2"]])
     rdict['labels'] = labels_dict
     return rdict
 
