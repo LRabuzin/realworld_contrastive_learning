@@ -225,6 +225,8 @@ def main():
     
     if args.use_pretrained_rn:
         weights = ResNet18_Weights.IMAGENET1K_V1
+    else:
+        weights = None
 
     # define encoder
     encoder = torch.nn.Sequential(
