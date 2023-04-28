@@ -14,7 +14,7 @@ from sklearn.neural_network import MLPClassifier
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
-from torchvision.models import resnet18
+from torchvision.models import resnet18, ResNet18_Weights
 
 from losses import infonce_loss
 from datasets import RealWorldIdentDataset
@@ -134,6 +134,8 @@ def parse_args():
     parser.add_argument("--no-cuda", action="store_true")
     parser.add_argument("--save-all-checkpoints", action="store_true")
     parser.add_argument("--load-from-memory", action="store_true")
+    parser.add_argument("--use-pretrained-rn", action="store_true")
+    parser.add_argument("--default-weights", action="store_true")
     args = parser.parse_args()
     return args, parser
 
@@ -221,9 +223,12 @@ def main():
 
         val_loader = DataLoader(val_dataset, collate_fn = collate_fn, **dataloader_kwargs)
     
+    if args.use_pretrained_rn:
+        weights = ResNet18_Weights.IMAGENET1K_V1
+
     # define encoder
     encoder = torch.nn.Sequential(
-        resnet18(num_classes=args.hidden_size), # change to 34
+        resnet18(num_classes=args.hidden_size, weights=weights), # change to 34
         torch.nn.LeakyReLU(),
         torch.nn.Linear(args.hidden_size, args.encoding_size))
     encoder = torch.nn.DataParallel(encoder)
@@ -232,7 +237,7 @@ def main():
     wandb.watch(encoder, loss_func, 'all', 200)
 
     # for evaluation, always load saved encoders
-    if args.evaluate:
+    if args.evaluate and not args.default_weights:
         path_encoder = os.path.join(args.save_dir, f"encoder_{args.encoder_number}.pt")
         encoder.load_state_dict(torch.load(path_encoder, map_location=device))
 
