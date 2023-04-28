@@ -14,7 +14,8 @@ from sklearn.neural_network import MLPClassifier
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
-from torchvision.models import resnet18, ResNet18_Weights
+from torchvision.models import resnet18
+from torchvision.models.resnet import ResNet18_Weights
 
 from losses import infonce_loss
 from datasets import RealWorldIdentDataset
