@@ -15,7 +15,7 @@ from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
 from torchvision.models import resnet18
-from torchvision.models.resnet import ResNet18_Weights
+# from torchvision.models.resnet import ResNet18_Weights
 
 from losses import infonce_loss
 from datasets import RealWorldIdentDataset
@@ -225,13 +225,15 @@ def main():
         val_loader = DataLoader(val_dataset, collate_fn = collate_fn, **dataloader_kwargs)
     
     if args.use_pretrained_rn:
-        weights = ResNet18_Weights.IMAGENET1K_V1
+        pretrained=True
+        # weights = ResNet18_Weights.IMAGENET1K_V1
     else:
-        weights = None
+        pretrained=False
+        # weights = None
 
     # define encoder
     encoder = torch.nn.Sequential(
-        resnet18(num_classes=args.hidden_size, weights=weights), # change to 34
+        resnet18(num_classes=args.hidden_size, pretrained=pretrained), # change to 34
         torch.nn.LeakyReLU(),
         torch.nn.Linear(args.hidden_size, args.encoding_size))
     encoder = torch.nn.DataParallel(encoder)
