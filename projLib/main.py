@@ -225,15 +225,15 @@ def main():
         val_loader = DataLoader(val_dataset, collate_fn = collate_fn, **dataloader_kwargs)
     
     if args.use_pretrained_rn:
-        pretrained=True
-        # weights = ResNet18_Weights.IMAGENET1K_V1
+        backbone = resnet18(pretrained=True)
     else:
-        pretrained=False
-        # weights = None
+        backbone = resnet18()
+    
+    backbone.fc = torch.nn.Linear(512, args.hidden_size)
 
     # define encoder
     encoder = torch.nn.Sequential(
-        resnet18(num_classes=args.hidden_size, pretrained=pretrained), # change to 34
+        backbone, # change to 34
         torch.nn.LeakyReLU(),
         torch.nn.Linear(args.hidden_size, args.encoding_size))
     encoder = torch.nn.DataParallel(encoder)
