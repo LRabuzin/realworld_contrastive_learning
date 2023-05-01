@@ -104,8 +104,12 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
     return rdict
 
 
-def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test):
+def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, category):
     model.fit(X_train, y_train)
+    for loss in model.loss_curve_:
+        wandb.log({f"{category}/train/loss":loss})
+    for val_acc in model.validation_scores_:
+        wandb.log({f"{category}/val/acc":val_acc})
     y_pred = model.predict(X_test)
     return metric(y_test, y_pred), y_pred
 
@@ -164,9 +168,10 @@ def main():
         device = "cpu"
         warnings.warn("cuda is not available or --no-cuda was set.")
 
+    name_addendum = "evaluate" if args.evaluate else ""
     run = wandb.init(
         project="realworld-blockident",
-        name=args.model_id,
+        name=args.model_id+name_addendum,
         config=vars(args),
         tags=["baseline_encoding", "rn18"],)
 
@@ -333,8 +338,11 @@ def main():
             print(np.shape(data[1][category]))
             print(np.shape(data[2]))
             print(np.shape(data[3][category]))
-            mlpreg = MLPClassifier(max_iter=1000, batch_size=args.batch_size)
-            acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category])
+            mlpreg = MLPClassifier(max_iter=1000,
+                                   batch_size=args.batch_size,
+                                   early_stopping=True,
+                                   learning_rate="adaptive")
+            acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category)
             accuracies.append(acc_mlp)
             raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
             raw_labels[category] = [int(label) for label in data[3][category]]
@@ -359,7 +367,10 @@ def main():
             print(np.shape(data[1][category]))
             print(np.shape(data[2]))
             print(np.shape(data[3][category]))
-            mlpreg = MLPClassifier(max_iter=1000, batch_size=args.batch_size)
+            mlpreg = MLPClassifier(max_iter=1000,
+                                   batch_size=args.batch_size,
+                                   early_stopping=True,
+                                   learning_rate="adaptive")
             acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category])
             accuracies.append(acc_mlp)
             raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
