@@ -150,7 +150,8 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             if labels.shape != [200,1]:
                 labels = torch.unsqueeze(labels, dim=1)
             print(f"Outputs shape: {outputs.shape}, labels shape: {labels.shape}")
-            loss = loss_function(outputs, labels, weights)
+            loss_function.weight = weights
+            loss = loss_function(outputs, labels)
             loss.backward()
             optimizer.step()
             train_loss += loss.item() * inputs.size(0)
