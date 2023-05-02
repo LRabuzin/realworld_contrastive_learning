@@ -40,7 +40,7 @@ class SimpleClassifier(torch.nn.Module):
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-        return F.sigmoid(x, dim=1)
+        return F.sigmoid(x)
 
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
