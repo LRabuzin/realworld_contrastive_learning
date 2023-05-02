@@ -32,7 +32,7 @@ class SimpleClassifier(torch.nn.Module):
     Simple pytorch classifier which takes 20-dimensional inputs, has a fully
     connected hidden layer with 100 units and a single softmax output layer.
     """
-    def __init__(self, input_size, hidden_size=100, output_size=1):
+    def __init__(self, input_size, hidden_size=100, output_size=2):
         super(SimpleClassifier, self).__init__()
         self.fc1 = torch.nn.Linear(input_size, hidden_size)
         self.fc2 = torch.nn.Linear(hidden_size, output_size)
@@ -40,7 +40,7 @@ class SimpleClassifier(torch.nn.Module):
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-        return F.sigmoid(x)
+        return F.log_softmax(x)
 
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
@@ -125,13 +125,13 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
-    weights_per_label = [1./(total_sample_count-total_category_count), 1./(total_category_count)]
+    weights_per_label = [1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)]
 
     X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
 
     trainloader = DataLoader(TensorDataset(torch.tensor(X_tr), torch.tensor(y_tr)), batch_size=200, shuffle=True)
     # valloader = DataLoader(TensorDataset(torch.tensor(X_val), torch.tensor(y_val)), batch_size=200, shuffle=False)
-    loss_function = torch.nn.BCELoss()
+    loss_function = torch.nn.NLLLoss(weight=weights_per_label)
     optimizer = torch.optim.Adam(model.parameters())
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10, verbose=True)  
 
@@ -142,7 +142,6 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         model.train()
         train_loss = 0.0
         for inputs, labels in trainloader:
-            weights = torch.tensor([weights_per_label[label] for label in labels]).to(device)
             inputs, labels = inputs.to(device), labels.float().to(device)
             print(f"Inputs shape: {inputs.shape}, labels shape: {labels.shape}")
             optimizer.zero_grad()
@@ -150,7 +149,6 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             if labels.shape != [200,1]:
                 labels = torch.unsqueeze(labels, dim=1)
             print(f"Outputs shape: {outputs.shape}, labels shape: {labels.shape}")
-            loss_function.weight = weights
             loss = loss_function(outputs, labels)
             loss.backward()
             optimizer.step()
