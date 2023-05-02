@@ -142,7 +142,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         model.train()
         train_loss = 0.0
         for inputs, labels in trainloader:
-            inputs, labels = inputs.to(device), labels.float().to(device)
+            inputs, labels = inputs.to(device), labels.long().to(device)
             print(f"Inputs shape: {inputs.shape}, labels shape: {labels.shape}")
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -161,7 +161,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             y_val_pred = model(torch.tensor(X_val).argmax(dim=0).to(device))
             # if len(np.shape(y_val)) != 2:
             #     y_val = torch.unsqueeze(torch.tensor(y_val), dim=1)
-            val_metric = validation_metric(y_val.float().to(device), y_val_pred)
+            val_metric = validation_metric(y_val.long().to(device), y_val_pred)
             if val_metric > best_metric:
                 best_metric = val_metric
                 early_stop_count = 0
