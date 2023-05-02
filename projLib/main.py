@@ -143,10 +143,12 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         train_loss = 0.0
         for inputs, labels in trainloader:
             inputs, labels = inputs.to(device), labels.float().to(device)
+            print(f"Inputs shape: {inputs.shape}, labels shape: {labels.shape}")
             optimizer.zero_grad()
             outputs = model(inputs)
-            if len(labels.shape) != 2:
+            if labels.shape != [200,1]:
                 labels = torch.unsqueeze(labels, dim=1)
+            print(f"Outputs shape: {outputs.shape}, labels shape: {labels.shape}")
             loss = loss_function(outputs, labels)
             loss.backward()
             optimizer.step()
