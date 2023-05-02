@@ -125,7 +125,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
-    weights_per_label = [1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)]
+    weights_per_label = torch.tensor([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)])
 
     X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
 
@@ -158,7 +158,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
 
         model.eval()
         with torch.no_grad():
-            y_val_pred = model(torch.tensor(X_val).to(device))
+            y_val_pred = model(torch.tensor(X_val).argmax(dim=0).to(device))
             if len(np.shape(y_val)) != 2:
                 y_val = torch.unsqueeze(torch.tensor(y_val), dim=1)
             val_metric = validation_metric(y_val.float().to(device), y_val_pred)
@@ -173,7 +173,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             wandb.log({f"eval/train/{category}/metric": train_loss})
             scheduler.step(val_metric)
     
-    y_pred = model(X_test).detach().cpu().numpy()
+    y_pred = model(X_test).argmax(dim=0).detach().cpu().numpy()
 
     print(f"Training completed after {epoch+1} epochs with best {metric.__name__}: {best_metric}")
     return metric(y_test, y_pred), y_pred
