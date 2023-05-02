@@ -158,7 +158,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
 
         model.eval()
         with torch.no_grad():
-            y_val_pred = model(torch.tensor(X_val)).argmax(dim=0).to(device).float()
+            y_val_pred = model(torch.tensor(X_val).to(device)).argmax(dim=0).float()
             # if len(np.shape(y_val)) != 2:
             #     y_val = torch.unsqueeze(torch.tensor(y_val), dim=1)
             val_metric = validation_metric(y_val.long().to(device), y_val_pred)
@@ -173,7 +173,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             wandb.log({f"eval/train/{category}/metric": train_loss})
             scheduler.step(val_metric)
     
-    y_pred = model(X_test).argmax(dim=0).detach().cpu().numpy()
+    y_pred = model(torch.tensor(X_test).to(device)).argmax(dim=0).detach().cpu().numpy()
 
     print(f"Training completed after {epoch+1} epochs with best {metric.__name__}: {best_metric}")
     return metric(y_test, y_pred), y_pred
