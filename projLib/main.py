@@ -161,7 +161,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             y_val_pred = model(torch.tensor(X_val).to(device)).argmax(dim=0).float()
             # if len(np.shape(y_val)) != 2:
             #     y_val = torch.unsqueeze(torch.tensor(y_val), dim=1)
-            val_metric = validation_metric(y_val.long().to(device), y_val_pred)
+            val_metric = validation_metric(y_val, y_val_pred.long().detach().cpu().numpy())
             if val_metric > best_metric:
                 best_metric = val_metric
                 early_stop_count = 0
