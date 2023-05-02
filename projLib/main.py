@@ -145,6 +145,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
+            labels = torch.unsqueeze(labels, dim=1)
             loss = loss_function(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -154,8 +155,8 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
 
         model.eval()
         with torch.no_grad():
-            y_val_pred = model(X_val)
-            val_metric = validation_metric(y_val, y_val_pred)
+            y_val_pred = model(torch.tensor(X_val).to(device))
+            val_metric = validation_metric(torch.tensor(y_val).unsqueeze(dim=1).to(device), y_val_pred)
             if val_metric > best_metric:
                 best_metric = val_metric
                 early_stop_count = 0
