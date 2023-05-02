@@ -125,7 +125,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
-    weights_per_label = torch.tensor([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)]).to(device)
+    weights_per_label = torch.tensor([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)]).float().to(device)
 
     X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
 
@@ -145,7 +145,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             inputs, labels = inputs.to(device), labels.long().to(device)
             print(f"Inputs shape: {inputs.shape}, labels shape: {labels.shape}")
             optimizer.zero_grad()
-            outputs = model(inputs)
+            outputs = model(inputs).float()
             # if labels.shape != [200,1]:
             #     labels = torch.unsqueeze(labels, dim=1)
             print(f"Outputs shape: {outputs.shape}, labels shape: {labels.shape}")
@@ -158,7 +158,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
 
         model.eval()
         with torch.no_grad():
-            y_val_pred = model(torch.tensor(X_val).argmax(dim=0).to(device))
+            y_val_pred = model(torch.tensor(X_val).argmax(dim=0).to(device)).float()
             # if len(np.shape(y_val)) != 2:
             #     y_val = torch.unsqueeze(torch.tensor(y_val), dim=1)
             val_metric = validation_metric(y_val.long().to(device), y_val_pred)
