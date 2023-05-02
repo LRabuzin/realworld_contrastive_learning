@@ -146,8 +146,8 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             print(f"Inputs shape: {inputs.shape}, labels shape: {labels.shape}")
             optimizer.zero_grad()
             outputs = model(inputs)
-            if labels.shape != [200,1]:
-                labels = torch.unsqueeze(labels, dim=1)
+            # if labels.shape != [200,1]:
+            #     labels = torch.unsqueeze(labels, dim=1)
             print(f"Outputs shape: {outputs.shape}, labels shape: {labels.shape}")
             loss = loss_function(outputs, labels)
             loss.backward()
@@ -159,8 +159,8 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         model.eval()
         with torch.no_grad():
             y_val_pred = model(torch.tensor(X_val).argmax(dim=0).to(device))
-            if len(np.shape(y_val)) != 2:
-                y_val = torch.unsqueeze(torch.tensor(y_val), dim=1)
+            # if len(np.shape(y_val)) != 2:
+            #     y_val = torch.unsqueeze(torch.tensor(y_val), dim=1)
             val_metric = validation_metric(y_val.float().to(device), y_val_pred)
             if val_metric > best_metric:
                 best_metric = val_metric
