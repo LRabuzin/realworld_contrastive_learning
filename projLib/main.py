@@ -145,7 +145,8 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             inputs, labels = inputs.to(device), labels.float().to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
-            labels = torch.unsqueeze(labels, dim=1)
+            if len(labels.shape) != 2:
+                labels = torch.unsqueeze(labels, dim=1)
             loss = loss_function(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -156,7 +157,9 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         model.eval()
         with torch.no_grad():
             y_val_pred = model(torch.tensor(X_val).to(device))
-            val_metric = validation_metric(torch.tensor(y_val).unsqueeze(dim=1).float().to(device), y_val_pred)
+            if len(np.shape(y_val)) != 2:
+                y_val = torch.unsqueeze(torch.tensor(y_val), dim=1)
+            val_metric = validation_metric(y_val.float().to(device), y_val_pred)
             if val_metric > best_metric:
                 best_metric = val_metric
                 early_stop_count = 0
@@ -395,10 +398,10 @@ def main():
                 continue
             print("evaluating category:")
             print(category)
-            print(np.shape(data[0]))
-            print(np.shape(data[1][category]))
-            print(np.shape(data[2]))
-            print(np.shape(data[3][category]))
+            # print(np.shape(data[0]))
+            # print(np.shape(data[1][category]))
+            # print(np.shape(data[2]))
+            # print(np.shape(data[3][category]))
             mlpreg = SimpleClassifier(args.encoding_size)
             acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
             accuracies.append(acc_mlp)
