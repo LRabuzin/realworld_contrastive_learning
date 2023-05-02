@@ -158,7 +158,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
 
         model.eval()
         with torch.no_grad():
-            y_val_pred = model(torch.tensor(X_val).argmax(dim=0).to(device)).float()
+            y_val_pred = model(torch.tensor(X_val)).argmax(dim=0).to(device).float()
             # if len(np.shape(y_val)) != 2:
             #     y_val = torch.unsqueeze(torch.tensor(y_val), dim=1)
             val_metric = validation_metric(y_val.long().to(device), y_val_pred)
