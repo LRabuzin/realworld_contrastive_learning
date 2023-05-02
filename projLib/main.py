@@ -125,7 +125,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
-    weights_per_label = torch.tensor([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)])
+    weights_per_label = torch.tensor([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)]).to(device)
 
     X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
 
