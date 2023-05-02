@@ -171,7 +171,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
                 if early_stop_count >= scheduler.patience:
                     print(f"Early stopping at epoch {epoch} with best {validation_metric.__name__}: {best_metric}")
                     break
-            wandb.log({f"eval/train/{category}/metric": train_loss})
+            wandb.log({f"eval/train/{category}/metric": val_metric})
             scheduler.step(val_metric)
     
     y_pred = model(torch.tensor(X_test).to(device)).argmax(dim=1).detach().cpu().numpy()
