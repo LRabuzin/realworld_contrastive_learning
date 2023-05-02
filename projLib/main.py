@@ -122,6 +122,10 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
 
 
 def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, category, validation_metric):
+    X_train = np.array(X_train)
+    y_train = np.array(y_train)
+    X_test = np.array(X_test)
+    y_test = np.array(y_test)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
