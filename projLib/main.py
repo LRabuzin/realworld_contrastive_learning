@@ -125,13 +125,13 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
-    weights = [1./(total_sample_count-total_category_count), 1./(total_category_count)]
+    weights_per_label = [1./(total_sample_count-total_category_count), 1./(total_category_count)]
 
     X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
 
     trainloader = DataLoader(TensorDataset(torch.tensor(X_tr), torch.tensor(y_tr)), batch_size=200, shuffle=True)
-    valloader = DataLoader(TensorDataset(torch.tensor(X_val), torch.tensor(y_val)), batch_size=200, shuffle=False)
-    loss_function = torch.nn.BCELoss(torch.tensor(weights))
+    # valloader = DataLoader(TensorDataset(torch.tensor(X_val), torch.tensor(y_val)), batch_size=200, shuffle=False)
+    loss_function = torch.nn.BCELoss()
     optimizer = torch.optim.Adam(model.parameters())
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10, verbose=True)  
 
@@ -142,6 +142,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         model.train()
         train_loss = 0.0
         for inputs, labels in trainloader:
+            weights = torch.tensor([weights_per_label[label] for label in labels]).to(device)
             inputs, labels = inputs.to(device), labels.float().to(device)
             print(f"Inputs shape: {inputs.shape}, labels shape: {labels.shape}")
             optimizer.zero_grad()
@@ -149,7 +150,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
             if labels.shape != [200,1]:
                 labels = torch.unsqueeze(labels, dim=1)
             print(f"Outputs shape: {outputs.shape}, labels shape: {labels.shape}")
-            loss = loss_function(outputs, labels)
+            loss = loss_function(outputs, labels, weights)
             loss.backward()
             optimizer.step()
             train_loss += loss.item() * inputs.size(0)
