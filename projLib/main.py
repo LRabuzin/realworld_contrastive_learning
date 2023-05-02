@@ -11,10 +11,12 @@ import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, balanced_accuracy_score, precision_recall_curve, auc
 from sklearn.neural_network import MLPClassifier
+from sklearn.model_selection import train_test_split
 from torch.nn.utils import clip_grad_norm_
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, TensorDataset
 from torchvision import transforms
 from torchvision.models import resnet18
+import torch.nn.functional as F
 # from torchvision.models.resnet import ResNet18_Weights
 
 from losses import infonce_loss
@@ -24,6 +26,21 @@ from pair_constructor import PairConfiguration, get_distribution_of_style_classe
 
 from tqdm import tqdm
 import wandb
+
+class SimpleClassifier(torch.nn.Module):
+    """
+    Simple pytorch classifier which takes 20-dimensional inputs, has a fully
+    connected hidden layer with 100 units and a single softmax output layer.
+    """
+    def __init__(self, input_size, hidden_size=100, output_size=1):
+        super(SimpleClassifier, self).__init__()
+        self.fc1 = torch.nn.Linear(input_size, hidden_size)
+        self.fc2 = torch.nn.Linear(hidden_size, output_size)
+    
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return F.sigmoid(x, dim=1)
 
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
@@ -104,14 +121,57 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
     return rdict
 
 
-def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, category):
-    model.fit(X_train, y_train)
-    for loss in model.loss_curve_:
-        wandb.log({f"{category}/train/loss":loss})
-    for val_acc in model.validation_scores_:
-        wandb.log({f"{category}/val/acc":val_acc})
-    y_pred = model.predict(X_test)
+def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, category, validation_metric):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    total_category_count = y_train.sum()
+    total_sample_count = len(y_train)
+    weights = [1./(total_sample_count-total_category_count), 1./(total_category_count)]
+
+    X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
+
+    trainloader = DataLoader(TensorDataset(torch.tensor(X_tr), torch.tensor(y_tr)), batch_size=200, shuffle=True)
+    valloader = DataLoader(TensorDataset(torch.tensor(X_val), torch.tensor(y_val)), batch_size=200, shuffle=False)
+    loss_function = torch.nn.BCELoss(torch.tensor(weights))
+    optimizer = torch.optim.Adam(model.parameters())
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10, verbose=True)  
+
+    best_metric = 0
+    early_stop_count = 0
+    for epoch in range(1000):
+        model.to(device)
+        model.train()
+        train_loss = 0.0
+        for inputs, labels in trainloader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = loss_function(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item() * inputs.size(0)
+        train_loss = train_loss / len(trainloader.dataset)
+        wandb.log({f"eval/train/{category}/loss": train_loss})
+
+        model.eval()
+        with torch.no_grad():
+            y_val_pred = model(X_val)
+            val_metric = validation_metric(y_val, y_val_pred)
+            if val_metric > best_metric:
+                best_metric = val_metric
+                early_stop_count = 0
+            else:
+                early_stop_count += 1
+                if early_stop_count >= scheduler.patience:
+                    print(f"Early stopping at epoch {epoch} with best {validation_metric.__name__}: {best_metric}")
+                    break
+            wandb.log({f"eval/train/{category}/metric": train_loss})
+            scheduler.step(val_metric)
+    
+    y_pred = model(X_test).detach().cpu().numpy()
+
+    print(f"Training completed after {epoch+1} epochs with best {metric.__name__}: {best_metric}")
     return metric(y_test, y_pred), y_pred
+
 
 
 def parse_args():
@@ -338,11 +398,8 @@ def main():
             print(np.shape(data[1][category]))
             print(np.shape(data[2]))
             print(np.shape(data[3][category]))
-            mlpreg = MLPClassifier(max_iter=1000,
-                                   batch_size=args.batch_size,
-                                   early_stopping=True,
-                                   learning_rate="adaptive")
-            acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category)
+            mlpreg = SimpleClassifier(args.encoding_size)
+            acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
             accuracies.append(acc_mlp)
             raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
             raw_labels[category] = [int(label) for label in data[3][category]]
@@ -367,11 +424,8 @@ def main():
             print(np.shape(data[1][category]))
             print(np.shape(data[2]))
             print(np.shape(data[3][category]))
-            mlpreg = MLPClassifier(max_iter=1000,
-                                   batch_size=args.batch_size,
-                                   early_stopping=True,
-                                   learning_rate="adaptive")
-            acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category)
+            mlpreg = SimpleClassifier(args.encoding_size)
+            acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
             accuracies.append(acc_mlp)
             raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
             raw_labels[category] = [int(label) for label in data[3][category]]
