@@ -272,7 +272,7 @@ def main():
     test_annotations = os.path.join(args.data_dir, "test.json")
     categories = os.path.join(args.data_dir, "categories.json")
     if args.leq_content_factors:
-        ns = list(range(2, args.n+1))
+        ns = list(range(1, args.n+1))
     else:
         ns = [args.n]
     config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=ns)
