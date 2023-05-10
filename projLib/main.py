@@ -175,7 +175,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
                 early_stop_count = 0
             else:
                 early_stop_count += 1
-                if early_stop_count >= scheduler.patience:
+                if early_stop_count >= 2*scheduler.patience:
                     print(f"Early stopping at epoch {epoch} with best {validation_metric.__name__}: {best_metric}")
                     break
             wandb.log({f"eval/train/{category}/metric": val_metric})
