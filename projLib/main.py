@@ -21,26 +21,12 @@ import torch.nn.functional as F
 
 from losses import infonce_loss
 from datasets import RealWorldIdentDataset
+from models import SimpleClassifier
 from infinite_iterator import InfiniteIterator
 from pair_constructor import PairConfiguration, get_distribution_of_style_classes
 
 from tqdm import tqdm
 import wandb
-
-class SimpleClassifier(torch.nn.Module):
-    """
-    Simple pytorch classifier which takes 20-dimensional inputs, has a fully
-    connected hidden layer with 100 units and a single softmax output layer.
-    """
-    def __init__(self, input_size, hidden_size=100, output_size=2):
-        super(SimpleClassifier, self).__init__()
-        self.fc1 = torch.nn.Linear(input_size, hidden_size)
-        self.fc2 = torch.nn.Linear(hidden_size, output_size)
-    
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return F.log_softmax(x)
 
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
@@ -150,12 +136,12 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         train_loss = 0.0
         for inputs, labels in trainloader:
             inputs, labels = inputs.to(device), labels.long().to(device)
-            print(f"Inputs shape: {inputs.shape}, labels shape: {labels.shape}")
+            # print(f"Inputs shape: {inputs.shape}, labels shape: {labels.shape}")
             optimizer.zero_grad()
             outputs = model(inputs).float()
             # if labels.shape != [200,1]:
             #     labels = torch.unsqueeze(labels, dim=1)
-            print(f"Outputs shape: {outputs.shape}, labels shape: {labels.shape}")
+            # print(f"Outputs shape: {outputs.shape}, labels shape: {labels.shape}")
             loss = loss_function(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -186,7 +172,56 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
     print(f"Training completed after {epoch+1} epochs with best {metric.__name__}: {best_metric}")
     return metric(y_test, y_pred), y_pred
 
+def full_evaluation(args, val_dataset, test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories):
+    val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
+    test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
 
+    print(f"<Val Loss>: {np.mean(val_dict['loss_values']):.4f}")
+    print(f"<Test Loss>: {np.mean(test_dict['loss_values']):.4f}")
+
+    results = []
+
+    # select data
+    train_inputs = np.concatenate((val_dict[f"hz_image_1"], val_dict[f"hz_image_2"]))
+    test_inputs = np.concatenate((test_dict[f"hz_image_1"], test_dict[f"hz_image_2"]))
+    train_labels = {category: np.concatenate((val_dict["labels"][category], val_dict["labels"][category])) for category in content_categories}
+    test_labels = {category: np.concatenate((test_dict["labels"][category], test_dict["labels"][category])) for category in content_categories}
+    train_labels = train_labels | {category: val_dict["labels"][category] for category in style_categories}
+    test_labels = test_labels | {category: test_dict["labels"][category] for category in style_categories}
+    data = [train_inputs, train_labels, test_inputs, test_labels]
+
+    accuracies = ["acc"]
+    precisions = ["prec"]
+    recalls = ["recall"]
+    f1s = ["f1"]
+    roc_aucs = ["roc_auc"]
+    balanced_accs = ["balanced_acc"]
+    prc_aucs = ["prc_auc"]
+    class_freq = ["class_freq"]
+    raw_predictions = {}
+    raw_labels = {}
+
+    for category in content_categories:
+        if len(data[0]) == 0 or len(data[2]) == 0:
+            continue
+        mlpreg = SimpleClassifier(args.encoding_size)
+        acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+        accuracies.append(acc_mlp)
+        raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
+        raw_labels[category] = [int(label) for label in data[3][category]]
+        precisions.append(precision_score(raw_labels[category], raw_predictions[category]))
+        recalls.append(recall_score(raw_labels[category], raw_predictions[category]))
+        f1s.append(f1_score(raw_labels[category], raw_predictions[category]))
+        balanced_accs.append(balanced_accuracy_score(raw_labels[category], raw_predictions[category]))
+        class_freq.append(sum(raw_labels[category]))
+        if max(raw_labels[category]) != min(raw_labels[category]):
+            roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
+            prec, recall, _ = precision_recall_curve(raw_labels[category], raw_predictions[category])
+            prc_aucs.append(auc(recall, prec))
+        else:
+            roc_aucs.append(-1)
+            prc_aucs.append(-1)
+        wandb.log({f"val/mlp/{category}/b_acc": balanced_accs[-1]})
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -282,6 +317,10 @@ def main():
     val_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(1), keep_in_memory=keep_in_memory, **dataset_kwargs)
     test_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(2), keep_in_memory=keep_in_memory, **dataset_kwargs)
     heldout_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(3), keep_in_memory=keep_in_memory, **dataset_kwargs)
+    val_val_indices = list(range(0, len(val_dataset), 5))
+    val_train_indices = list(set(range(len(val_dataset))).difference(set(val_val_indices)))
+    val_1_dataset = torch.utils.data.Subset(val_dataset, val_train_indices)
+    val_2_dataset = torch.utils.data.Subset(val_dataset, val_val_indices)
     content_categories = config.content_categories
     style_categories = config.style_categories
     shared_style_categories = list(set(get_distribution_of_style_classes(config, 0))
@@ -360,6 +399,7 @@ def main():
                     })
                     print(f"Step: {step} \t",
                         f"Val Loss: {loss_value:.4f} \t")
+                    full_evaluation(args, val_1_dataset, val_2_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
                     # if len(val_loss_values) >= 5:
                     #     if val_loss_values[-5] - val_loss_values[-1] < 0.05:
                     #         stop_flag=True
