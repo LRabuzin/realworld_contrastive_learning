@@ -371,6 +371,8 @@ def main():
     else:
         full_model = encoder
 
+    full_model.to(device)
+
     # for evaluation, always load saved encoders
     if args.evaluate and not args.default_weights:
         path_encoder = os.path.join(args.save_dir, f"encoder_{args.encoder_number}.pt")
