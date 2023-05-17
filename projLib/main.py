@@ -250,6 +250,7 @@ def parse_args():
     parser.add_argument("--load-from-memory", action="store_true")
     parser.add_argument("--use-pretrained-rn", action="store_true")
     parser.add_argument("--default-weights", action="store_true")
+    parser.add_argument("--full-eval-steps", type=int, default=5000)
     args = parser.parse_args()
     return args, parser
 
@@ -399,6 +400,8 @@ def main():
                     })
                     print(f"Step: {step} \t",
                         f"Val Loss: {loss_value:.4f} \t")
+                
+                if step % args.full_eval_steps == 1 or step == args.train_steps:
                     full_evaluation(args, val_1_dataset, val_2_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
                     # if len(val_loss_values) >= 5:
                     #     if val_loss_values[-5] - val_loss_values[-1] < 0.05:
