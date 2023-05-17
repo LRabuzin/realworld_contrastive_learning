@@ -251,6 +251,8 @@ def parse_args():
     parser.add_argument("--use-pretrained-rn", action="store_true")
     parser.add_argument("--default-weights", action="store_true")
     parser.add_argument("--full-eval-steps", type=int, default=5000)
+    parser.add_argument("--use-simclr-head", action="store_true")
+    parser.add_argument("--projection-dim", type=int, default=20)
     args = parser.parse_args()
     return args, parser
 
@@ -360,12 +362,21 @@ def main():
 
     wandb.watch(encoder, loss_func, 'all', 200)
 
+    if args.use_simclr_head:
+        simclr_head = torch.nn.Sequential(
+            torch.nn.Linear(args.encoding_size, args.encoding_size),
+            torch.nn.ReLU(),
+            torch.nn.Linear(args.encoding_size, args.projection_dim))
+        full_model = torch.nn.Sequential(encoder, simclr_head)
+    else:
+        full_model = encoder
+
     # for evaluation, always load saved encoders
     if args.evaluate and not args.default_weights:
         path_encoder = os.path.join(args.save_dir, f"encoder_{args.encoder_number}.pt")
         encoder.load_state_dict(torch.load(path_encoder, map_location=device))
 
-    params = list(encoder.parameters())
+    params = list(full_model.parameters())
     optimizer = torch.optim.Adam(params, lr=args.lr)
 
     if not args.evaluate:
@@ -378,7 +389,7 @@ def main():
             while (step <= args.train_steps and not stop_flag):
 
                 data = next(train_iterator)
-                loss_value = train_step(data, encoder, loss_func, optimizer, params)
+                loss_value = train_step(data, full_model, loss_func, optimizer, params)
                 loss_values.append(loss_value)
 
                 if step % args.log_steps == 1 or step == args.train_steps:
@@ -392,7 +403,7 @@ def main():
                 if step % args.val_steps == 1 or step == args.train_steps:
                     val_loss = 0
                     for data in val_loader:
-                        val_loss += val_step(data, encoder, loss_func)
+                        val_loss += val_step(data, full_model, loss_func)
                     val_loss /= len(val_loader)
                     val_loss_values.append(val_loss)
                     wandb.log({
