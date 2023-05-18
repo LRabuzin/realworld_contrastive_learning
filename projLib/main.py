@@ -253,6 +253,7 @@ def parse_args():
     parser.add_argument("--full-eval-steps", type=int, default=5000)
     parser.add_argument("--use-simclr-head", action="store_true")
     parser.add_argument("--projection-dim", type=int, default=20)
+    parser.add_argument("--color-jitter-strength", type=float, default=0)
     args = parser.parse_args()
     return args, parser
 
@@ -297,7 +298,15 @@ def main():
     transform = transforms.Compose([
         transforms.Resize((480, 480)),
         transforms.ToTensor(),
-        transforms.Normalize(mean_per_channel, std_per_channel)])
+        transforms.Normalize(mean_per_channel, std_per_channel)
+    ])
+    
+    train_transform = transforms.Compose([
+        transforms.Resize((480, 480)),
+        transforms.ToTensor(),
+        transforms.ColorJitter(args.color_jitter_strength, args.color_jitter_strength, args.color_jitter_strength, args.color_jitter_strength),
+        transforms.Normalize(mean_per_channel, std_per_channel)
+    ])
     
     dataset_kwargs = {"transform": transform}
     dataloader_kwargs = {
@@ -316,7 +325,7 @@ def main():
     config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=ns)
     keep_in_memory = not args.load_from_memory
     if not args.evaluate:
-        train_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(0), keep_in_memory=keep_in_memory, **dataset_kwargs)
+        train_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(0), keep_in_memory=keep_in_memory, transform=train_transform)
     val_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(1), keep_in_memory=keep_in_memory, **dataset_kwargs)
     test_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(2), keep_in_memory=keep_in_memory, **dataset_kwargs)
     heldout_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(3), keep_in_memory=keep_in_memory, **dataset_kwargs)
