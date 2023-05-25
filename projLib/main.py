@@ -296,7 +296,7 @@ def main():
     mean_per_channel = [0.485, 0.456, 0.406]  # values from ImageNet
     std_per_channel = [0.229, 0.224, 0.225]   # values from ImageNet
     transform = transforms.Compose([
-        transforms.Resize((480, 480)),
+        transforms.Resize((256, 256)), #change this to be adjustable
         transforms.ToTensor(),
         transforms.Normalize(mean_per_channel, std_per_channel)
     ])
