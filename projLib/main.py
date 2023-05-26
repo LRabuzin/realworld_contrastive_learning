@@ -12,6 +12,7 @@ import torch
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, balanced_accuracy_score, precision_recall_curve, auc
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, random_split, TensorDataset
 from torchvision import transforms
@@ -105,6 +106,26 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
                 labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style2"]])
     rdict['labels'] = labels_dict
     return rdict
+
+def evaluate_prediction_using_logreg(metric, X_train, y_train, X_test, y_test, category, validation_metric):
+    X_train = np.array(X_train)
+    y_train = np.array(y_train)
+    X_test = np.array(X_test)
+    y_test = np.array(y_test)
+    total_category_count = y_train.sum()
+    total_sample_count = len(y_train)
+    weights_per_label = np.array([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)])
+    if y_train.sum() >= 2:
+        X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
+    else:
+        X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
+    
+    model = LogisticRegression(class_weight="balanced", max_iter=1000, solver="newton-cholesky", n_jobs=-1)
+    model.fit(X_tr, y_tr)
+    y_pred = model.predict(X_test)
+
+    return metric(y_test, y_pred), y_pred
+
 
 
 def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, category, validation_metric):
@@ -254,6 +275,7 @@ def parse_args():
     parser.add_argument("--use-simclr-head", action="store_true")
     parser.add_argument("--projection-dim", type=int, default=20)
     parser.add_argument("--color-jitter-strength", type=float, default=0)
+    parser.add_argument("--use-logreg-for-eval", action="store_true")
     args = parser.parse_args()
     return args, parser
 
@@ -296,7 +318,7 @@ def main():
     mean_per_channel = [0.485, 0.456, 0.406]  # values from ImageNet
     std_per_channel = [0.229, 0.224, 0.225]   # values from ImageNet
     transform = transforms.Compose([
-        transforms.Resize((256, 256)), #change this to be adjustable
+        transforms.Resize((480, 480)),
         transforms.ToTensor(),
         transforms.Normalize(mean_per_channel, std_per_channel)
     ])
@@ -473,12 +495,11 @@ def main():
                 continue
             print("evaluating category:")
             print(category)
-            # print(np.shape(data[0]))
-            # print(np.shape(data[1][category]))
-            # print(np.shape(data[2]))
-            # print(np.shape(data[3][category]))
-            mlpreg = SimpleClassifier(args.encoding_size)
-            acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+            if args.use_logreg_for_eval:
+                acc_mlp, raw_prediction = evaluate_prediction_using_logreg(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+            else:
+                mlpreg = SimpleClassifier(args.encoding_size)
+                acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
             accuracies.append(acc_mlp)
             raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
             raw_labels[category] = [int(label) for label in data[3][category]]
@@ -486,6 +507,8 @@ def main():
             recalls.append(recall_score(raw_labels[category], raw_predictions[category]))
             f1s.append(f1_score(raw_labels[category], raw_predictions[category]))
             balanced_accs.append(balanced_accuracy_score(raw_labels[category], raw_predictions[category]))
+            print("balanced_acc")
+            print(balanced_accs[-1])
             class_freq.append(sum(raw_labels[category]))
             if max(raw_labels[category]) != min(raw_labels[category]):
                 roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
@@ -499,12 +522,11 @@ def main():
                 continue
             print("evaluating style category:")
             print(category)
-            print(np.shape(data[0]))
-            print(np.shape(data[1][category]))
-            print(np.shape(data[2]))
-            print(np.shape(data[3][category]))
-            mlpreg = SimpleClassifier(args.encoding_size)
-            acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+            if args.use_logreg_for_eval:
+                acc_mlp, raw_prediction = evaluate_prediction_using_logreg(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+            else:
+                mlpreg = SimpleClassifier(args.encoding_size)
+                acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
             accuracies.append(acc_mlp)
             raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
             raw_labels[category] = [int(label) for label in data[3][category]]
@@ -512,6 +534,8 @@ def main():
             recalls.append(recall_score(raw_labels[category], raw_predictions[category]))
             f1s.append(f1_score(raw_labels[category], raw_predictions[category]))
             balanced_accs.append(balanced_accuracy_score(raw_labels[category], raw_predictions[category]))
+            print("balanced_acc")
+            print(balanced_accs[-1])
             class_freq.append(sum(raw_labels[category]))
             if max(raw_labels[category]) != min(raw_labels[category]):
                 roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
