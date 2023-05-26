@@ -118,9 +118,10 @@ def evaluate_prediction_using_logreg(metric, X_train, y_train, X_test, y_test, c
     if y_train.sum() >= 2:
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
     else:
-        X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
+        return 0.5, np.zeros(len(y_test))
+        # X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
     
-    model = LogisticRegression(class_weight="balanced", max_iter=1000, solver="newton-cg", n_jobs=-1)
+    model = LogisticRegression(class_weight="balanced", max_iter=1000, solver="lbfgs", n_jobs=-1)
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_test)
 
