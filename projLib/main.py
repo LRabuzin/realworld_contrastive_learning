@@ -114,14 +114,14 @@ def evaluate_prediction_using_logreg(metric, X_train, y_train, X_test, y_test, c
     y_test = np.array(y_test)
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
-    weights_per_label = np.array([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)])
+    # weights_per_label = np.array([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)])
     if y_train.sum() >= 2:
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
     else:
         return 0.5, np.zeros(len(y_test))
         # X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
     
-    model = LogisticRegression(class_weight="balanced", max_iter=1000, solver="lbfgs", n_jobs=-1)
+    model = LogisticRegression(class_weight="balanced", max_iter=1000, solver="newton-cg", n_jobs=-1)
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_test)
 
