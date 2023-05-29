@@ -143,7 +143,7 @@ def evaluate_prediction_using_gp(metric, X_train, y_train, X_test, y_test, categ
         return 0.5, np.zeros(len(y_test))
         # X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
     
-    model = GaussianProcessClassifier(n_jobs=-1)
+    model = GaussianProcessClassifier(n_jobs=-1, )
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_test)
 
@@ -163,7 +163,7 @@ def evaluate_prediction_using_svc(metric, X_train, y_train, X_test, y_test, cate
         return 0.5, np.zeros(len(y_test))
         # X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
     
-    model = SVC(class_weight='balanced')
+    model = SVC(class_weight='balanced', verbose=True)
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_test)
 
@@ -371,7 +371,7 @@ def main():
     train_transform = transforms.Compose([
         transforms.Resize((480, 480)),
         transforms.ToTensor(),
-        transforms.ColorJitter(args.color_jitter_strength, args.color_jitter_strength, args.color_jitter_strength, args.color_jitter_strength),
+        # transforms.ColorJitter(args.color_jitter_strength, args.color_jitter_strength, args.color_jitter_strength, args.color_jitter_strength),
         transforms.Normalize(mean_per_channel, std_per_channel)
     ])
     
@@ -459,6 +459,7 @@ def main():
     print("Loaded encoder.")
     params = list(full_model.parameters())
     optimizer = torch.optim.Adam(params, lr=args.lr)
+    print("Loaded optimizer.")
 
     if not args.evaluate:
         step = 1
@@ -509,7 +510,9 @@ def main():
                 pbar.update(1)
     else:
         val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
+        print("got val dict")
         test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
+        print("got test dict")
         # print(val_dict)
         # print("*************")
         # print(test_dict)
@@ -527,7 +530,7 @@ def main():
         train_labels = train_labels | {category: val_dict["labels"][category] for category in style_categories}
         test_labels = test_labels | {category: test_dict["labels"][category] for category in style_categories}
         data = [train_inputs, train_labels, test_inputs, test_labels]
-        print("Made data.")
+        print("Made data.", flush=True)
 
         accuracies = ["acc"]
         precisions = ["prec"]
@@ -542,7 +545,7 @@ def main():
         for category in content_categories:
             if len(data[0]) == 0 or len(data[2]) == 0:
                 continue
-            print("evaluating category:")
+            print("evaluating category:", flush=True)
             print(category)
             if args.use_logreg_for_eval:
                 acc_mlp, raw_prediction = evaluate_prediction_using_logreg(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
@@ -577,6 +580,10 @@ def main():
             print(category)
             if args.use_logreg_for_eval:
                 acc_mlp, raw_prediction = evaluate_prediction_using_logreg(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+            elif args.use_svc_for_eval:
+                acc_mlp, raw_prediction = evaluate_prediction_using_svc(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+            elif args.use_gp_for_eval:
+                acc_mlp, raw_prediction = evaluate_prediction_using_gp(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
             else:
                 mlpreg = SimpleClassifier(args.encoding_size)
                 acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
