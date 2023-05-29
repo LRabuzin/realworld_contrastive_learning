@@ -390,6 +390,7 @@ def main():
     else:
         ns = [args.n]
     config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=ns)
+    print("Making datasets...")
     keep_in_memory = not args.load_from_memory
     if not args.evaluate:
         train_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(0), keep_in_memory=keep_in_memory, transform=train_transform)
@@ -406,6 +407,7 @@ def main():
                                    .intersection(get_distribution_of_style_classes(config, 1))
                                    .intersection(get_distribution_of_style_classes(config, 2))
                                    .intersection(get_distribution_of_style_classes(config, 3)))
+    print("Made datasets.")
     # train_len = math.floor(0.1*len(dataset))#change
     # val_len = math.floor(0.4*len(dataset))#change
     # test_len = math.floor(0.4*len(dataset))#change
@@ -454,6 +456,7 @@ def main():
         path_encoder = os.path.join(args.save_dir, f"encoder_{args.encoder_number}.pt")
         encoder.load_state_dict(torch.load(path_encoder, map_location=device))
 
+    print("Loaded encoder.")
     params = list(full_model.parameters())
     optimizer = torch.optim.Adam(params, lr=args.lr)
 
@@ -524,6 +527,7 @@ def main():
         train_labels = train_labels | {category: val_dict["labels"][category] for category in style_categories}
         test_labels = test_labels | {category: test_dict["labels"][category] for category in style_categories}
         data = [train_inputs, train_labels, test_inputs, test_labels]
+        print("Made data.")
 
         accuracies = ["acc"]
         precisions = ["prec"]
