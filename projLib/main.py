@@ -13,6 +13,8 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.svm import SVC
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, random_split, TensorDataset
 from torchvision import transforms
@@ -122,6 +124,46 @@ def evaluate_prediction_using_logreg(metric, X_train, y_train, X_test, y_test, c
         # X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
     
     model = LogisticRegression(class_weight="balanced", max_iter=1000, solver="newton-cg", n_jobs=-1)
+    model.fit(X_tr, y_tr)
+    y_pred = model.predict(X_test)
+
+    return metric(y_test, y_pred), y_pred
+
+def evaluate_prediction_using_gp(metric, X_train, y_train, X_test, y_test, category, validation_metric):
+    X_train = np.array(X_train)
+    y_train = np.array(y_train)
+    X_test = np.array(X_test)
+    y_test = np.array(y_test)
+    total_category_count = y_train.sum()
+    total_sample_count = len(y_train)
+    # weights_per_label = np.array([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)])
+    if y_train.sum() >= 2:
+        X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
+    else:
+        return 0.5, np.zeros(len(y_test))
+        # X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
+    
+    model = GaussianProcessClassifier(n_jobs=-1)
+    model.fit(X_tr, y_tr)
+    y_pred = model.predict(X_test)
+
+    return metric(y_test, y_pred), y_pred
+
+def evaluate_prediction_using_svc(metric, X_train, y_train, X_test, y_test, category, validation_metric):
+    X_train = np.array(X_train)
+    y_train = np.array(y_train)
+    X_test = np.array(X_test)
+    y_test = np.array(y_test)
+    total_category_count = y_train.sum()
+    total_sample_count = len(y_train)
+    # weights_per_label = np.array([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)])
+    if y_train.sum() >= 2:
+        X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
+    else:
+        return 0.5, np.zeros(len(y_test))
+        # X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
+    
+    model = SVC(class_weight='balanced')
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_test)
 
@@ -277,6 +319,8 @@ def parse_args():
     parser.add_argument("--projection-dim", type=int, default=20)
     parser.add_argument("--color-jitter-strength", type=float, default=0)
     parser.add_argument("--use-logreg-for-eval", action="store_true")
+    parser.add_argument("--use-gp-for-eval", action="store_true")
+    parser.add_argument("--use-svc-for-eval", action="store_true")
     args = parser.parse_args()
     return args, parser
 
@@ -498,6 +542,10 @@ def main():
             print(category)
             if args.use_logreg_for_eval:
                 acc_mlp, raw_prediction = evaluate_prediction_using_logreg(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+            elif args.use_svc_for_eval:
+                acc_mlp, raw_prediction = evaluate_prediction_using_svc(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+            elif args.use_gp_for_eval:
+                acc_mlp, raw_prediction = evaluate_prediction_using_gp(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
             else:
                 mlpreg = SimpleClassifier(args.encoding_size)
                 acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
