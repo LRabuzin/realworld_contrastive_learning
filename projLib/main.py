@@ -101,7 +101,9 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
     ])
 
     with torch.no_grad():
-        for data in loader:  # NOTE: can yield slightly too many samples
+        for i in tqdm(range(len(loader))):
+            data = next(iter(loader))
+        # for data in loader:  # NOTE: can yield slightly too many samples
             loss_value = val_step(data, encoder, loss_func)
             rdict["loss_values"].append([loss_value])
 
