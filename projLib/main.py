@@ -20,6 +20,7 @@ from torch.utils.data import DataLoader, random_split, TensorDataset
 from torchvision import transforms
 from torchvision.models import resnet18
 import torch.nn.functional as F
+from torch.utils.data import WeightedRandomSampler
 # from torchvision.models.resnet import ResNet18_Weights
 
 from losses import infonce_loss
@@ -207,13 +208,13 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
     weights_per_label = torch.tensor([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)]).float().to(device)
-
+    sample_weights = torch.tensor([weights_per_label[y] for y in y_train]).float().to(device)
+    sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
     if y_train.sum() >= 2:
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
     else:
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
-
-    trainloader = DataLoader(TensorDataset(torch.tensor(X_tr), torch.tensor(y_tr)), batch_size=200, shuffle=True)
+    trainloader = DataLoader(TensorDataset(torch.tensor(X_tr), torch.tensor(y_tr)), batch_size=200, shuffle=True, sampler=sampler)
     # valloader = DataLoader(TensorDataset(torch.tensor(X_val), torch.tensor(y_val)), batch_size=200, shuffle=False)
     loss_function = torch.nn.NLLLoss(weight=weights_per_label)
     optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0.01)
