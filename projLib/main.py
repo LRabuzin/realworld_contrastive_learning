@@ -121,7 +121,7 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
             for style_category in style_categories:
                 labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style1"]])
             if augment:
-                for i in range(3):
+                for i in range(1):
                     hz_image_1 = encoder(train_transform(data["image1"]))
                     hz_image_2 = encoder(train_transform(data["image2"]))
                     for i in range(len(hz_image_1)):
@@ -135,7 +135,7 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
             for style_category in style_categories:
                 labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style2"]])
             if augment:
-                for i in range(3):
+                for i in range(1):
                     for style_category in style_categories:
                         labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style2"]])
     rdict['labels'] = labels_dict
