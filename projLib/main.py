@@ -189,7 +189,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
     trainloader = DataLoader(TensorDataset(torch.tensor(X_tr), torch.tensor(y_tr)), batch_size=200, shuffle=True)
     # valloader = DataLoader(TensorDataset(torch.tensor(X_val), torch.tensor(y_val)), batch_size=200, shuffle=False)
     loss_function = torch.nn.NLLLoss(weight=weights_per_label)
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0.01)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10, verbose=True)  
 
     best_metric = 0
@@ -321,6 +321,7 @@ def parse_args():
     parser.add_argument("--use-logreg-for-eval", action="store_true")
     parser.add_argument("--use-gp-for-eval", action="store_true")
     parser.add_argument("--use-svc-for-eval", action="store_true")
+    parser.add_argument("--only-eval-content", action="store_true")
     args = parser.parse_args()
     return args, parser
 
@@ -573,37 +574,38 @@ def main():
             else:
                 roc_aucs.append(-1)
                 prc_aucs.append(-1)
-        for category in style_categories:
-            if len(data[0]) == 0 or len(data[2]) == 0:
-                continue
-            print("evaluating style category:")
-            print(category)
-            if args.use_logreg_for_eval:
-                acc_mlp, raw_prediction = evaluate_prediction_using_logreg(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
-            elif args.use_svc_for_eval:
-                acc_mlp, raw_prediction = evaluate_prediction_using_svc(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
-            elif args.use_gp_for_eval:
-                acc_mlp, raw_prediction = evaluate_prediction_using_gp(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
-            else:
-                mlpreg = SimpleClassifier(args.encoding_size)
-                acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
-            accuracies.append(acc_mlp)
-            raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
-            raw_labels[category] = [int(label) for label in data[3][category]]
-            precisions.append(precision_score(raw_labels[category], raw_predictions[category]))
-            recalls.append(recall_score(raw_labels[category], raw_predictions[category]))
-            f1s.append(f1_score(raw_labels[category], raw_predictions[category]))
-            balanced_accs.append(balanced_accuracy_score(raw_labels[category], raw_predictions[category]))
-            print("balanced_acc")
-            print(balanced_accs[-1])
-            class_freq.append(sum(raw_labels[category]))
-            if max(raw_labels[category]) != min(raw_labels[category]):
-                roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
-                prec, recall, _ = precision_recall_curve(raw_labels[category], raw_predictions[category])
-                prc_aucs.append(auc(recall, prec))
-            else:
-                roc_aucs.append(-1)
-                prc_aucs.append(-1)
+        if not args.only_eval_content:
+            for category in style_categories:
+                if len(data[0]) == 0 or len(data[2]) == 0:
+                    continue
+                print("evaluating style category:")
+                print(category)
+                if args.use_logreg_for_eval:
+                    acc_mlp, raw_prediction = evaluate_prediction_using_logreg(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+                elif args.use_svc_for_eval:
+                    acc_mlp, raw_prediction = evaluate_prediction_using_svc(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+                elif args.use_gp_for_eval:
+                    acc_mlp, raw_prediction = evaluate_prediction_using_gp(accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+                else:
+                    mlpreg = SimpleClassifier(args.encoding_size)
+                    acc_mlp, raw_prediction = evaluate_prediction(mlpreg, accuracy_score, data[0], data[1][category], data[2], data[3][category], category, balanced_accuracy_score)
+                accuracies.append(acc_mlp)
+                raw_predictions[category] = [int(prediction) for prediction in raw_prediction]
+                raw_labels[category] = [int(label) for label in data[3][category]]
+                precisions.append(precision_score(raw_labels[category], raw_predictions[category]))
+                recalls.append(recall_score(raw_labels[category], raw_predictions[category]))
+                f1s.append(f1_score(raw_labels[category], raw_predictions[category]))
+                balanced_accs.append(balanced_accuracy_score(raw_labels[category], raw_predictions[category]))
+                print("balanced_acc")
+                print(balanced_accs[-1])
+                class_freq.append(sum(raw_labels[category]))
+                if max(raw_labels[category]) != min(raw_labels[category]):
+                    roc_aucs.append(roc_auc_score(raw_labels[category], raw_predictions[category]))
+                    prec, recall, _ = precision_recall_curve(raw_labels[category], raw_predictions[category])
+                    prc_aucs.append(auc(recall, prec))
+                else:
+                    roc_aucs.append(-1)
+                    prc_aucs.append(-1)
 
 
 
