@@ -216,7 +216,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
     trainloader = DataLoader(TensorDataset(torch.tensor(X_tr), torch.tensor(y_tr)), batch_size=200, shuffle=True, sampler=sampler)
     # valloader = DataLoader(TensorDataset(torch.tensor(X_val), torch.tensor(y_val)), batch_size=200, shuffle=False)
-    loss_function = torch.nn.NLLLoss(weight=weights_per_label)
+    loss_function = torch.nn.NLLLoss()#weight=weights_per_label)
     optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0.01)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10, verbose=True)  
 
