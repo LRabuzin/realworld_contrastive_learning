@@ -101,24 +101,17 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
     ])
 
     with torch.no_grad():
-        for i in tqdm(range(len(loader))):
-            data = next(iter(loader))
+        for data in loader:
         # for data in loader:  # NOTE: can yield slightly too many samples
             loss_value = val_step(data, encoder, loss_func)
             rdict["loss_values"].append([loss_value])
 
             hz_image_1 = encoder(data["image1"])
             hz_image_2 = encoder(data["image2"])
-            # print("shape of encodings")
-            # print(np.shape(hz_image_1))
-            # print(np.shape(hz_image_2))
             for i in range(len(hz_image_1)):
                 rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
                 rdict["hz_image_2"].append(hz_image_2[i].detach().cpu().numpy())
             for category in content_categories:
-                # print("content shape")
-                # print(np.shape(data["content"]))
-                # zipped_content = zip(*[list(content) for content in data["content"]])
                 labels_dict[category].extend([1 if category in content else 0 for content in data["content"]])
             for style_category in style_categories:
                 labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style1"]])
@@ -546,6 +539,7 @@ def main():
                 pbar.update(1)
     else:
         dataloader_kwargs['shuffle'] = False
+        print("Getting val dict")
         val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, args.augment_eval)
         print("got val dict")
         test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
