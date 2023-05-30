@@ -510,6 +510,7 @@ def main():
                 step += 1
                 pbar.update(1)
     else:
+        dataloader_kwargs['shuffle'] = False
         val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
         print("got val dict")
         test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
