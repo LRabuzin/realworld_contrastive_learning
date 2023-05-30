@@ -76,12 +76,29 @@ def val_step(data, encoder, loss_func):
     return train_step(data, encoder, loss_func, optimizer=None, params=None)
 
 
-def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories):
+def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, augment=False):
     encoder.eval()
     loader = DataLoader(dataset, collate_fn=collate_fn, **dataloader_kwargs)
     rdict = {"hz_image_1": [], "hz_image_2": [],"loss_values": [], "labels": []}
     labels_dict = {category:[] for category in content_categories}
     labels_dict = labels_dict | {category:[] for category in style_categories}
+
+    inv_normalize = transforms.Compose([
+        transforms.Normalize(mean=[0., 0., 0.],
+                                std=[1 / 0.229, 1 / 0.224, 1 / 0.225]),
+        transforms.Normalize(mean=[-0.485, -0.456, -0.406],
+                                std=[1., 1., 1.]),
+    ])
+
+    mean_per_channel = [0.485, 0.456, 0.406]
+    std_per_channel = [0.229, 0.224, 0.225]
+
+    train_transform = transforms.Compose([
+        inv_normalize,
+        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.3),
+        transforms.RandomHorizontalFlip(),
+        transforms.Normalize(mean_per_channel, std_per_channel)
+    ])
 
     with torch.no_grad():
         for data in loader:  # NOTE: can yield slightly too many samples
@@ -103,9 +120,24 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
                 labels_dict[category].extend([1 if category in content else 0 for content in data["content"]])
             for style_category in style_categories:
                 labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style1"]])
+            if augment:
+                for i in range(3):
+                    hz_image_1 = encoder(train_transform(data["image1"]))
+                    hz_image_2 = encoder(train_transform(data["image2"]))
+                    for i in range(len(hz_image_1)):
+                        rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
+                        rdict["hz_image_2"].append(hz_image_2[i].detach().cpu().numpy())
+                    for category in content_categories:
+                        labels_dict[category].extend([1 if category in content else 0 for content in data["content"]])
+                    for style_category in style_categories:
+                        labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style1"]])
         for data in loader:
             for style_category in style_categories:
                 labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style2"]])
+            if augment:
+                for i in range(3):
+                    for style_category in style_categories:
+                        labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style2"]])
     rdict['labels'] = labels_dict
     return rdict
 
@@ -322,6 +354,7 @@ def parse_args():
     parser.add_argument("--use-gp-for-eval", action="store_true")
     parser.add_argument("--use-svc-for-eval", action="store_true")
     parser.add_argument("--only-eval-content", action="store_true")
+    parser.add_argument("--augment-eval", action="store_true")
     args = parser.parse_args()
     return args, parser
 
@@ -511,7 +544,7 @@ def main():
                 pbar.update(1)
     else:
         dataloader_kwargs['shuffle'] = False
-        val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
+        val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, args.augment_eval)
         print("got val dict")
         test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
         print("got test dict")
