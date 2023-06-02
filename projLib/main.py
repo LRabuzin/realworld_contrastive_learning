@@ -18,7 +18,7 @@ from sklearn.svm import SVC
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader, random_split, TensorDataset
 from torchvision import transforms
-from torchvision.models import resnet18
+from torchvision.models import resnet18, resnet34
 import torch.nn.functional as F
 from torch.utils.data import WeightedRandomSampler
 # from torchvision.models.resnet import ResNet18_Weights
@@ -213,10 +213,10 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
     else:
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
     sample_weights = torch.tensor([weights_per_label[y] for y in y_tr]).float().to(device)
-    sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
-    trainloader = DataLoader(TensorDataset(torch.tensor(X_tr), torch.tensor(y_tr)), batch_size=200, sampler=sampler)
+    # sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
+    trainloader = DataLoader(TensorDataset(torch.tensor(X_tr), torch.tensor(y_tr)), batch_size=200, shuffle=True)#sampler=sampler)
     # valloader = DataLoader(TensorDataset(torch.tensor(X_val), torch.tensor(y_val)), batch_size=200, shuffle=False)
-    loss_function = torch.nn.NLLLoss()#weight=weights_per_label)
+    loss_function = torch.nn.NLLLoss(weight=weights_per_label)
     optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0.01)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10, verbose=True)  
 
@@ -351,6 +351,7 @@ def parse_args():
     parser.add_argument("--use-svc-for-eval", action="store_true")
     parser.add_argument("--only-eval-content", action="store_true")
     parser.add_argument("--augment-eval", action="store_true")
+    parser.add_argument("--use-rn34", action="store_true")
     args = parser.parse_args()
     return args, parser
 
@@ -452,11 +453,17 @@ def main():
         train_iterator = InfiniteIterator(train_loader)
 
         val_loader = DataLoader(val_dataset, collate_fn = collate_fn, **dataloader_kwargs)
-    
-    if args.use_pretrained_rn:
-        backbone = resnet18(pretrained=True)
+
+    if args.use_rn34:
+        if args.use_pretrained_rn:
+            backbone = resnet34(pretrained=True)
+        else:
+            backbone = resnet34()
     else:
-        backbone = resnet18()
+        if args.use_pretrained_rn:
+            backbone = resnet18(pretrained=True)
+        else:
+            backbone = resnet18()
     
     backbone.fc = torch.nn.Linear(512, args.hidden_size)
 
