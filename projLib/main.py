@@ -32,7 +32,7 @@ from pair_constructor import PairConfiguration, get_distribution_of_style_classe
 from tqdm import tqdm
 import wandb
 
-from transformers import CLIPVisionModelWithProjection, AutoProcessor
+from transformers import CLIPVisionModel, AutoProcessor
 
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
@@ -491,7 +491,7 @@ def main():
 
     # define encoder
     if args.use_clip:
-        encoder = CLIPVisionModelWithProjection.from_pretrained("openai/clip-vit-base-patch32")
+        encoder = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
     else:
         encoder = torch.nn.Sequential(
             backbone, # change to 34
