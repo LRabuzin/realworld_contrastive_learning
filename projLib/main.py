@@ -59,6 +59,7 @@ def train_step(data, encoder, loss_func, optimizer, params):
 
     x1 = data['image1']
     x2 = data['image2']
+    print(x1.shape())
     hz1 = encoder(x1)
     hz2 = encoder(x2)
     loss_value1 = loss_func(hz1, hz2)
