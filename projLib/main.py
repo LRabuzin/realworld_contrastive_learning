@@ -32,7 +32,7 @@ from pair_constructor import PairConfiguration, get_distribution_of_style_classe
 from tqdm import tqdm
 import wandb
 
-from transformers import CLIPVisionModel, AutoProcessor
+from transformers import CLIPVisionModelWithProjection, AutoProcessor
 
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
@@ -115,17 +115,17 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
             if args is not None and args.use_clip:
                 image_1 = processor(images=data["image1"], return_tensors="pt")
                 image_2 = processor(images=data["image2"], return_tensors="pt")
-                hz_image_1 = encoder(image_1)
-                hz_image_2 = encoder(image_2)
+                hz_image_1 = encoder(**image_1)
+                hz_image_2 = encoder(**image_2)
             else:
                 hz_image_1 = encoder(data["image1"])
                 hz_image_2 = encoder(data["image2"])
 
             #when using CLIP the output is a tuple
             if type(hz_image_1) == tuple(torch.FloatTensor):
-                hz_image_1 = hz_image_1[1]
+                hz_image_1 = hz_image_1[0]
             if type(hz_image_2) == tuple(torch.FloatTensor):
-                hz_image_2 = hz_image_2[1]
+                hz_image_2 = hz_image_2[0]
             
             for i in range(len(hz_image_1)):
                 rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
@@ -491,7 +491,7 @@ def main():
 
     # define encoder
     if args.use_clip:
-        encoder = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
+        encoder = CLIPVisionModelWithProjection.from_pretrained("openai/clip-vit-base-patch32")
     else:
         encoder = torch.nn.Sequential(
             backbone, # change to 34
