@@ -32,6 +32,8 @@ from pair_constructor import PairConfiguration, get_distribution_of_style_classe
 from tqdm import tqdm
 import wandb
 
+from transformers import CLIPVisionModel
+
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
         image2 = torch.stack([sample["image2"] for sample in batch])
@@ -109,6 +111,13 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
 
             hz_image_1 = encoder(data["image1"])
             hz_image_2 = encoder(data["image2"])
+
+            #when using CLIP the output is a tuple
+            if type(hz_image_1) == tuple(torch.FloatTensor):
+                hz_image_1 = hz_image_1[1]
+            if type(hz_image_2) == tuple(torch.FloatTensor):
+                hz_image_2 = hz_image_2[1]
+            
             for i in range(len(hz_image_1)):
                 rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
                 rdict["hz_image_2"].append(hz_image_2[i].detach().cpu().numpy())
@@ -352,11 +361,15 @@ def parse_args():
     parser.add_argument("--only-eval-content", action="store_true")
     parser.add_argument("--augment-eval", action="store_true")
     parser.add_argument("--use-rn34", action="store_true")
+    parser.add_argument("--use-clip", action="store_true")
     args = parser.parse_args()
     return args, parser
 
 def main():
     args, _ = parse_args()
+
+    if args.use_clip:
+        args.hidden_size=1024
 
     if args.model_id is None:
         setattr(args, "model_id", str(uuid.uuid4()))
@@ -468,10 +481,15 @@ def main():
     backbone.fc = torch.nn.Linear(512, args.hidden_size)
 
     # define encoder
-    encoder = torch.nn.Sequential(
-        backbone, # change to 34
-        torch.nn.LeakyReLU(),
-        torch.nn.Linear(args.hidden_size, args.encoding_size))
+    if args.use_clip:
+        encoder = CLIPVisionModel.from_pretrained("openai/clip-vit-base-patch32")
+    else:
+        encoder = torch.nn.Sequential(
+            backbone, # change to 34
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(args.hidden_size, args.encoding_size))
+    
+    
     encoder = torch.nn.DataParallel(encoder)
     encoder.to(device, non_blocking=True)
 
