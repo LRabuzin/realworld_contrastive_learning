@@ -32,7 +32,7 @@ from pair_constructor import PairConfiguration, get_distribution_of_style_classe
 from tqdm import tqdm
 import wandb
 
-from transformers import CLIPVisionModel
+from transformers import CLIPVisionModel, AutoProcessor
 
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
@@ -80,7 +80,7 @@ def val_step(data, encoder, loss_func):
     return train_step(data, encoder, loss_func, optimizer=None, params=None)
 
 
-def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, augment=False):
+def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, augment=False, args=None):
     encoder.eval()
     loader = DataLoader(dataset, collate_fn=collate_fn, **dataloader_kwargs)
     rdict = {"hz_image_1": [], "hz_image_2": [],"loss_values": [], "labels": []}
@@ -105,13 +105,21 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
     ])
 
     with torch.no_grad():
+        if args is not None and args.use_clip:
+            processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
         for data in loader:
         # for data in loader:  # NOTE: can yield slightly too many samples
             loss_value = val_step(data, encoder, loss_func)
             rdict["loss_values"].append([loss_value])
 
-            hz_image_1 = encoder(data["image1"])
-            hz_image_2 = encoder(data["image2"])
+            if args is not None and args.use_clip:
+                image_1 = processor(images=data["image1"], return_tensors="pt")
+                image_2 = processor(images=data["image2"], return_tensors="pt")
+                hz_image_1 = encoder(image_1)
+                hz_image_2 = encoder(image_2)
+            else:
+                hz_image_1 = encoder(data["image1"])
+                hz_image_2 = encoder(data["image2"])
 
             #when using CLIP the output is a tuple
             if type(hz_image_1) == tuple(torch.FloatTensor):
@@ -567,9 +575,9 @@ def main():
     else:
         dataloader_kwargs['shuffle'] = False
         print("Getting val dict")
-        val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, args.augment_eval)
+        val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, args.augment_eval, args = args)
         print("got val dict")
-        test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
+        test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, args=args)
         print("got test dict")
         # print(val_dict)
         # print("*************")
