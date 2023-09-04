@@ -32,7 +32,7 @@ from pair_constructor import PairConfiguration, get_distribution_of_style_classe
 from tqdm import tqdm
 import wandb
 
-from transformers import CLIPVisionModel, AutoProcessor
+from transformers import CLIPVisionModel, CLIPProcessor
 
 def collate_fn(batch):
         image1 = torch.stack([sample["image1"] for sample in batch])
@@ -49,7 +49,7 @@ def collate_fn(batch):
             "style2": style2
             }
 
-def train_step(data, encoder, loss_func, optimizer, params):
+def train_step(data, encoder, loss_func, optimizer, params, args = None):
     if optimizer is not None:
         optimizer.zero_grad(set_to_none=True)
         encoder.train()
@@ -57,11 +57,20 @@ def train_step(data, encoder, loss_func, optimizer, params):
         encoder.eval()
         torch.set_grad_enabled(False)
 
+    if args is not None and args.use_clip:
+        processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    
     x1 = data['image1']
     x2 = data['image2']
-    print(x1.shape)
-    hz1 = encoder(x1)
-    hz2 = encoder(x2)
+
+    if args is not None and args.use_clip:
+        image_1 = processor(images=x1, return_tensors="pt")
+        image_2 = processor(images=x2, return_tensors="pt")
+        hz1 = encoder(**image_1)[1]
+        hz2 = encoder(**image_2)[1]
+    else:
+        hz1 = encoder(x1)
+        hz2 = encoder(x2)
     loss_value1 = loss_func(hz1, hz2)
     loss_value2 = loss_func(hz2, hz1)
     loss_value = 0.5 * (loss_value1 + loss_value2)  # symmetrized infonce loss
@@ -76,8 +85,8 @@ def train_step(data, encoder, loss_func, optimizer, params):
 
     return loss_value.item()
 
-def val_step(data, encoder, loss_func):
-    return train_step(data, encoder, loss_func, optimizer=None, params=None)
+def val_step(data, encoder, loss_func, args = None):
+    return train_step(data, encoder, loss_func, optimizer=None, params=None, args = args)
 
 
 def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, augment=False, args=None):
@@ -106,26 +115,21 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
 
     with torch.no_grad():
         if args is not None and args.use_clip:
-            processor = AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
+            processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         for data in loader:
         # for data in loader:  # NOTE: can yield slightly too many samples
-            loss_value = val_step(data, encoder, loss_func)
+            loss_value = val_step(data, encoder, loss_func, args)
             rdict["loss_values"].append([loss_value])
 
             if args is not None and args.use_clip:
                 image_1 = processor(images=data["image1"], return_tensors="pt")
                 image_2 = processor(images=data["image2"], return_tensors="pt")
-                hz_image_1 = encoder(**image_1)
-                hz_image_2 = encoder(**image_2)
+                hz_image_1 = encoder(**image_1)[1]
+                hz_image_2 = encoder(**image_2)[1]
             else:
                 hz_image_1 = encoder(data["image1"])
                 hz_image_2 = encoder(data["image2"])
 
-            #when using CLIP the output is a tuple
-            if type(hz_image_1) == tuple(torch.FloatTensor):
-                hz_image_1 = hz_image_1[0]
-            if type(hz_image_2) == tuple(torch.FloatTensor):
-                hz_image_2 = hz_image_2[0]
             
             for i in range(len(hz_image_1)):
                 rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
