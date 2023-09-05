@@ -123,8 +123,8 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
 
             if args is not None and args.use_clip:
                 print(data["image1"].shape)
-                image_1 = processor(images=data["image1"], return_tensors="pt")
-                image_2 = processor(images=data["image2"], return_tensors="pt")
+                image_1 = processor(images=[data["image1"][i] for i in range(len(data["image1"]))], return_tensors="pt")
+                image_2 = processor(images=[data["image2"][i] for i in range(len(data["image2"]))], return_tensors="pt")
                 hz_image_1 = encoder(**image_1)[1]
                 hz_image_2 = encoder(**image_2)[1]
             else:
