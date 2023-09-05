@@ -131,8 +131,9 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
                 else:
                     hz_image_1 = encoder(data["image1"])
                     hz_image_2 = encoder(data["image2"])
-
                 
+                print(hz_image_1.shape)
+
                 for i in range(len(hz_image_1)):
                     rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
                     rdict["hz_image_2"].append(hz_image_2[i].detach().cpu().numpy())
