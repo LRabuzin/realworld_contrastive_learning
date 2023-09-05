@@ -119,47 +119,51 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
         for i in range(len(loader)):
             try:
                 data = loader[i]
+            # for data in loader:  # NOTE: can yield slightly too many samples
+                # loss_value = val_step(data, encoder, loss_func, args)
+                # rdict["loss_values"].append([loss_value])
+
+                if args is not None and args.use_clip:
+                    image_1 = processor(images=[data["image1"][i] for i in range(len(data["image1"]))], return_tensors="pt")
+                    image_2 = processor(images=[data["image2"][i] for i in range(len(data["image2"]))], return_tensors="pt")
+                    hz_image_1 = encoder(**image_1)[1]
+                    hz_image_2 = encoder(**image_2)[1]
+                else:
+                    hz_image_1 = encoder(data["image1"])
+                    hz_image_2 = encoder(data["image2"])
+
+                
+                for i in range(len(hz_image_1)):
+                    rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
+                    rdict["hz_image_2"].append(hz_image_2[i].detach().cpu().numpy())
+                for category in content_categories:
+                    labels_dict[category].extend([1 if category in content else 0 for content in data["content"]])
+                for style_category in style_categories:
+                    labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style1"]])
+                if augment:
+                    for i in range(1):
+                        hz_image_1 = encoder(train_transform(data["image1"]))
+                        hz_image_2 = encoder(train_transform(data["image2"]))
+                        for i in range(len(hz_image_1)):
+                            rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
+                            rdict["hz_image_2"].append(hz_image_2[i].detach().cpu().numpy())
+                        for category in content_categories:
+                            labels_dict[category].extend([1 if category in content else 0 for content in data["content"]])
+                        for style_category in style_categories:
+                            labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style1"]])
             except:
                 pass
-        # for data in loader:  # NOTE: can yield slightly too many samples
-            # loss_value = val_step(data, encoder, loss_func, args)
-            # rdict["loss_values"].append([loss_value])
-
-            if args is not None and args.use_clip:
-                image_1 = processor(images=[data["image1"][i] for i in range(len(data["image1"]))], return_tensors="pt")
-                image_2 = processor(images=[data["image2"][i] for i in range(len(data["image2"]))], return_tensors="pt")
-                hz_image_1 = encoder(**image_1)[1]
-                hz_image_2 = encoder(**image_2)[1]
-            else:
-                hz_image_1 = encoder(data["image1"])
-                hz_image_2 = encoder(data["image2"])
-
-            
-            for i in range(len(hz_image_1)):
-                rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
-                rdict["hz_image_2"].append(hz_image_2[i].detach().cpu().numpy())
-            for category in content_categories:
-                labels_dict[category].extend([1 if category in content else 0 for content in data["content"]])
-            for style_category in style_categories:
-                labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style1"]])
-            if augment:
-                for i in range(1):
-                    hz_image_1 = encoder(train_transform(data["image1"]))
-                    hz_image_2 = encoder(train_transform(data["image2"]))
-                    for i in range(len(hz_image_1)):
-                        rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
-                        rdict["hz_image_2"].append(hz_image_2[i].detach().cpu().numpy())
-                    for category in content_categories:
-                        labels_dict[category].extend([1 if category in content else 0 for content in data["content"]])
-                    for style_category in style_categories:
-                        labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style1"]])
-        for data in loader:
-            for style_category in style_categories:
-                labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style2"]])
-            if augment:
-                for i in range(1):
-                    for style_category in style_categories:
-                        labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style2"]])
+        for i in range(len(loader)):
+            try:
+                data = loader[i]
+                for style_category in style_categories:
+                    labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style2"]])
+                if augment:
+                    for i in range(1):
+                        for style_category in style_categories:
+                            labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style2"]])
+            except:
+                pass
     rdict['labels'] = labels_dict
     return rdict
 
