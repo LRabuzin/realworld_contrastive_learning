@@ -118,8 +118,8 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
             processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         for data in loader:
         # for data in loader:  # NOTE: can yield slightly too many samples
-            loss_value = val_step(data, encoder, loss_func, args)
-            rdict["loss_values"].append([loss_value])
+            # loss_value = val_step(data, encoder, loss_func, args)
+            # rdict["loss_values"].append([loss_value])
 
             if args is not None and args.use_clip:
                 image_1 = processor(images=data["image1"], return_tensors="pt")
