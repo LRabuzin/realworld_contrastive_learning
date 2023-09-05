@@ -116,13 +116,16 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
     with torch.no_grad():
         if args is not None and args.use_clip:
             processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-        for data in loader:
+        for i in range(len(loader)):
+            try:
+                data = loader[i]
+            except:
+                pass
         # for data in loader:  # NOTE: can yield slightly too many samples
             # loss_value = val_step(data, encoder, loss_func, args)
             # rdict["loss_values"].append([loss_value])
 
             if args is not None and args.use_clip:
-                print(data["image1"].shape)
                 image_1 = processor(images=[data["image1"][i] for i in range(len(data["image1"]))], return_tensors="pt")
                 image_2 = processor(images=[data["image2"][i] for i in range(len(data["image2"]))], return_tensors="pt")
                 hz_image_1 = encoder(**image_1)[1]
