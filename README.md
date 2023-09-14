@@ -37,13 +37,15 @@ Download the annotations from the BURST dataset and place the `train.json`, `val
 
 ### 3. Running experiments
 
-The experiments can be run using the `main.py` script. The script takes the following arguments:
+The experiments can be run using the `main.py` script. Importantly, training an encoder model and evaluating downstream performance require separate calls to `main.py`. The script uses wandb to log metrics, to be able to use that functionality, you need to be logged into your wandb account.
+
+The script takes the following arguments:
 - `data_dir`: path to directory containing frames from the TAO dataset
 - `model_dir`: directory where trained model will be/is saved
 - `var_name`: suffix added to model that is being trained/evaluated
 - `model_id`: name of directory where model is saved, if left empty, a random identifier will be generated
 - `encoding_size`: length of the encoding trained by the model
-- `hidden_size`: number of hidden layers in the final fc model layer
+- `hidden_size`: number of hidden layers in the final fully-connected model layer
 - `encoder_number`: which iteration of the model to use (model is saved multiple times during training, when evaluating, we can choose which iteration to evaluate)
 - `k`: number of most commonly occurring categories considered content
 - `n`: number of allowed content categories per image pair
@@ -74,6 +76,8 @@ The experiments can be run using the `main.py` script. The script takes the foll
 - `augment_eval`: augment evaluation data with additional data
 - `use_rn34`: use resnet34 instead of resnet18 as encoder model
 - `use_clip`: use CLIP instead of resnet as encoder model
+
+Further usage instructions can be found in the docs directory.
 
 ## Repository structure
 projLib:
