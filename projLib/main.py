@@ -4,30 +4,26 @@ import os
 import random
 import uuid
 import warnings
-import math
 
 import numpy as np
 import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, balanced_accuracy_score, precision_recall_curve, auc
-from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.svm import SVC
 from torch.nn.utils import clip_grad_norm_
-from torch.utils.data import DataLoader, random_split, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset
 from torchvision import transforms
 from torchvision.models import resnet18, resnet34
 import torch.nn.functional as F
-from torch.utils.data import WeightedRandomSampler
-# from torchvision.models.resnet import ResNet18_Weights
 
 from losses import infonce_loss
 from datasets import RealWorldIdentDataset
 from models import SimpleClassifier
 from infinite_iterator import InfiniteIterator
-from pair_constructor import PairConfiguration, get_distribution_of_style_classes
+from pair_configuration import PairConfiguration, get_distribution_of_style_classes
 
 from tqdm import tqdm
 import wandb
@@ -35,21 +31,27 @@ import wandb
 from transformers import CLIPVisionModel, CLIPProcessor
 
 def collate_fn(batch):
-        image1 = torch.stack([sample["image1"] for sample in batch])
-        image2 = torch.stack([sample["image2"] for sample in batch])
-        content = [sample["content"] for sample in batch]
-        style1 = [sample["style1"] for sample in batch]
-        style2 = [sample["style2"] for sample in batch]
+    """
+    collation function used in dataloader
+    """
+    image1 = torch.stack([sample["image1"] for sample in batch])
+    image2 = torch.stack([sample["image2"] for sample in batch])
+    content = [sample["content"] for sample in batch]
+    style1 = [sample["style1"] for sample in batch]
+    style2 = [sample["style2"] for sample in batch]
 
-        return {
-            "image1": image1,
-            "image2": image2,
-            "content": content,
-            "style1": style1,
-            "style2": style2
-            }
+    return {
+        "image1": image1,
+        "image2": image2,
+        "content": content,
+        "style1": style1,
+        "style2": style2
+        }
 
 def train_step(data, encoder, loss_func, optimizer, params, args = None):
+    """
+    one training step of the encoder
+    """
     if optimizer is not None:
         optimizer.zero_grad(set_to_none=True)
         encoder.train()
@@ -86,10 +88,16 @@ def train_step(data, encoder, loss_func, optimizer, params, args = None):
     return loss_value.item()
 
 def val_step(data, encoder, loss_func, args = None):
+    """
+    One validation step of the model
+    """
     return train_step(data, encoder, loss_func, optimizer=None, params=None, args = args)
 
 
 def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, augment=False, args=None):
+    """
+    Returns dictionary of image encodings and corresponding labels
+    """
     encoder.eval()
     loader = DataLoader(dataset, collate_fn=collate_fn, **dataloader_kwargs)
     rdict = {"hz_image_1": [], "hz_image_2": [],"loss_values": [], "labels": []}
@@ -119,9 +127,6 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
         for i in range(len(loader)):
             try:
                 data = loader[i]
-            # for data in loader:  # NOTE: can yield slightly too many samples
-                # loss_value = val_step(data, encoder, loss_func, args)
-                # rdict["loss_values"].append([loss_value])
 
                 if args is not None and args.use_clip:
                     image_1 = processor(images=[data["image1"][i] for i in range(len(data["image1"]))], return_tensors="pt")
@@ -131,8 +136,6 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
                 else:
                     hz_image_1 = encoder(data["image1"])
                     hz_image_2 = encoder(data["image2"])
-                
-                print(hz_image_1.shape)
 
                 for i in range(len(hz_image_1)):
                     rdict["hz_image_1"].append(hz_image_1[i].detach().cpu().numpy())
@@ -141,6 +144,7 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
                     labels_dict[category].extend([1 if category in content else 0 for content in data["content"]])
                 for style_category in style_categories:
                     labels_dict[style_category].extend([1 if style_category in style else 0 for style in data["style1"]])
+                #generate additional data
                 if augment:
                     for i in range(1):
                         hz_image_1 = encoder(train_transform(data["image1"]))
@@ -168,6 +172,7 @@ def get_data(dataset, encoder, loss_func, dataloader_kwargs, content_categories,
     rdict['labels'] = labels_dict
     return rdict
 
+#evaluation using logistic regression
 def evaluate_prediction_using_logreg(metric, X_train, y_train, X_test, y_test, category, validation_metric):
     X_train = np.array(X_train)
     y_train = np.array(y_train)
@@ -175,19 +180,17 @@ def evaluate_prediction_using_logreg(metric, X_train, y_train, X_test, y_test, c
     y_test = np.array(y_test)
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
-    # weights_per_label = np.array([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)])
     if y_train.sum() >= 2:
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
     else:
-        return 0.5, np.zeros(len(y_test))
-        # X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
-    
+        return 0.5, np.zeros(len(y_test))    
     model = LogisticRegression(class_weight="balanced", max_iter=1000, solver="newton-cg", n_jobs=-1)
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_test)
 
     return metric(y_test, y_pred), y_pred
 
+#evaluation using gaussian processes
 def evaluate_prediction_using_gp(metric, X_train, y_train, X_test, y_test, category, validation_metric):
     X_train = np.array(X_train)
     y_train = np.array(y_train)
@@ -195,19 +198,17 @@ def evaluate_prediction_using_gp(metric, X_train, y_train, X_test, y_test, categ
     y_test = np.array(y_test)
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
-    # weights_per_label = np.array([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)])
     if y_train.sum() >= 2:
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
     else:
         return 0.5, np.zeros(len(y_test))
-        # X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
-    
+        
     model = GaussianProcessClassifier(n_jobs=-1, )
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_test)
-
     return metric(y_test, y_pred), y_pred
 
+#evaluation using support vector classification
 def evaluate_prediction_using_svc(metric, X_train, y_train, X_test, y_test, category, validation_metric):
     X_train = np.array(X_train)
     y_train = np.array(y_train)
@@ -215,21 +216,18 @@ def evaluate_prediction_using_svc(metric, X_train, y_train, X_test, y_test, cate
     y_test = np.array(y_test)
     total_category_count = y_train.sum()
     total_sample_count = len(y_train)
-    # weights_per_label = np.array([1.0*total_sample_count/(total_sample_count-total_category_count), 1.0*total_sample_count/(total_category_count)])
     if y_train.sum() >= 2:
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
     else:
         return 0.5, np.zeros(len(y_test))
-        # X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
-    
+        
     model = SVC(class_weight='balanced', verbose=True)
     model.fit(X_tr, y_tr)
     y_pred = model.predict(X_test)
 
     return metric(y_test, y_pred), y_pred
 
-
-
+#evaluation using MLP
 def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, category, validation_metric):
     X_train = np.array(X_train)
     y_train = np.array(y_train)
@@ -243,10 +241,7 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1, stratify=y_train)
     else:
         X_tr, X_val, y_tr, y_val = train_test_split(X_train, y_train, test_size=0.1)
-    sample_weights = torch.tensor([weights_per_label[y] for y in y_tr]).float().to(device)
-    # sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
     trainloader = DataLoader(TensorDataset(torch.tensor(X_tr), torch.tensor(y_tr)), batch_size=200, shuffle=True)#sampler=sampler)
-    # valloader = DataLoader(TensorDataset(torch.tensor(X_val), torch.tensor(y_val)), batch_size=200, shuffle=False)
     loss_function = torch.nn.NLLLoss(weight=weights_per_label)
     optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0.01)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10, verbose=True)  
@@ -259,12 +254,8 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         train_loss = 0.0
         for inputs, labels in trainloader:
             inputs, labels = inputs.to(device), labels.long().to(device)
-            # print(f"Inputs shape: {inputs.shape}, labels shape: {labels.shape}")
             optimizer.zero_grad()
             outputs = model(inputs).float()
-            # if labels.shape != [200,1]:
-            #     labels = torch.unsqueeze(labels, dim=1)
-            # print(f"Outputs shape: {outputs.shape}, labels shape: {labels.shape}")
             loss = loss_function(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -275,8 +266,6 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
         model.eval()
         with torch.no_grad():
             y_val_pred = model(torch.tensor(X_val).to(device)).argmax(dim=1).float()
-            # if len(np.shape(y_val)) != 2:
-            #     y_val = torch.unsqueeze(torch.tensor(y_val), dim=1)
             print(f"Y val shape: {np.shape(y_val)}, y val pred shape: {np.shape(y_val_pred)}")
             val_metric = validation_metric(y_val, y_val_pred.long().detach().cpu().numpy())
             if val_metric > best_metric:
@@ -296,6 +285,11 @@ def evaluate_prediction(model, metric, X_train, y_train, X_test, y_test, categor
     return metric(y_test, y_pred), y_pred
 
 def full_evaluation(args, val_dataset, test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories):
+    """
+    Full evaluation of model on downstream classification of content and style classes
+    Should be run during training
+    Only uses MLP for evaluation
+    """
     val_dict = get_data(val_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
     test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
 
@@ -303,8 +297,6 @@ def full_evaluation(args, val_dataset, test_dataset, encoder, loss_func, dataloa
     print(f"<Test Loss>: {np.mean(test_dict['loss_values']):.4f}")
 
     results = []
-
-    # select data
     train_inputs = np.concatenate((val_dict[f"hz_image_1"], val_dict[f"hz_image_2"]))
     test_inputs = np.concatenate((test_dict[f"hz_image_1"], test_dict[f"hz_image_2"]))
     train_labels = {category: np.concatenate((val_dict["labels"][category], val_dict["labels"][category])) for category in content_categories}
@@ -347,6 +339,55 @@ def full_evaluation(args, val_dataset, test_dataset, encoder, loss_func, dataloa
         wandb.log({f"val/mlp/{category}/b_acc": balanced_accs[-1]})
 
 def parse_args():
+    """
+    Args:
+    data_dir: path to directory containing frames from the TAO dataset
+    model_dir: directory where trained model will be/is saved
+    var_name: suffix added to model that is being trained/evaluated
+    model_id: name of directory where model is saved, if left empty, a 
+              random identifier will be generated
+    encoding_size: length of the encoding trained by the model
+    hidden_size: number of hidden layers in the final fc model layer
+    encoder_number: which iteration of the model to use (model is saved
+                    multiple times during training, when evaluating, we
+                    can choose which iteration to evaluate)
+    k: number of most commonly occurring categories considered content
+    n: number of allowed content categories per image pair
+    leq_content_factors: determines whether number of allowed content
+                         categories can be less than n (if set to false,
+                         model will be trained only using pairs with
+                         exactly n content categories)
+    tau: tau parameter used by the infonce loss
+    lr: encoder model learning rate
+    batch_size: batch size used to train encoder model
+    train_steps: how many steps to train the encoder model for
+    log_steps: determines logging frequency
+    val_steps: determines validation frequency
+    checkpoint_steps: determines checkpointing frequency
+    evaluate: if set, will not train the model, only evaluate it
+    seed: seed for random number generators
+    workers: number of workers for dataparallel training
+    no_cuda: if set, model will be trained/evaluated on cpu
+    save_all_checkpoints: if set, model will be saved on every training step
+    load_from_storage: if set, dataloader will not keep data in memory
+    use_pretrained_rn: if set, encoder will be initialized with weights
+                       pretrained on imagenet dataset
+    default_weights: if used when evaluating model, will not attempt to
+                     load a trained model and will evaluate untrained model
+    full_eval_steps: determines frequency of running an evaluation of learned
+                     embeddings on downstream classification of content and
+                     style classes from images
+    use_simclr_head: add simclr-style projection head on top of encoder model
+    projection_dim: dimension of simclr-style projected embeddings
+    color_jitter_strength: strength of color jitter used in data augmentation
+    use_logreg_for_eval: use logistic regression for evaluation (instead of MLP)
+    use_gp_for_eval: use gaussian process for evaluation (instead of MLP)
+    use_svc_for_eval: use support vector classification for evaluation (instead of MLP)
+    only_eval_content: only evaluate content classification (not style)
+    augment_eval: augment evaluation data with additional data
+    use_rn34: use resnet34 instead of resnet18 as encoder model
+    use_clip: use CLIP instead of resnet as encoder model
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, required=True)
     parser.add_argument("--model-dir", type=str, default="models")
@@ -370,7 +411,7 @@ def parse_args():
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--no-cuda", action="store_true")
     parser.add_argument("--save-all-checkpoints", action="store_true")
-    parser.add_argument("--load-from-memory", action="store_true")
+    parser.add_argument("--load-from-storage", action="store_true")
     parser.add_argument("--use-pretrained-rn", action="store_true")
     parser.add_argument("--default-weights", action="store_true")
     parser.add_argument("--full-eval-steps", type=int, default=5000)
@@ -415,6 +456,7 @@ def main():
         warnings.warn("cuda is not available or --no-cuda was set.")
 
     name_addendum = "evaluate" if args.evaluate else ""
+    # initialize wandb
     run = wandb.init(
         project="realworld-blockident",
         name=args.model_id+name_addendum,
@@ -437,7 +479,6 @@ def main():
     train_transform = transforms.Compose([
         transforms.Resize((480, 480)),
         transforms.ToTensor(),
-        # transforms.ColorJitter(args.color_jitter_strength, args.color_jitter_strength, args.color_jitter_strength, args.color_jitter_strength),
         transforms.Normalize(mean_per_channel, std_per_channel)
     ])
     
@@ -457,7 +498,7 @@ def main():
         ns = [args.n]
     config = PairConfiguration([train_annotations, val_annotations, test_annotations], categories, k=args.k, n=ns)
     print("Making datasets...")
-    keep_in_memory = not args.load_from_memory
+    keep_in_memory = not args.load_from_storage
     if not args.evaluate:
         train_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(0), keep_in_memory=keep_in_memory, transform=train_transform)
     val_dataset = RealWorldIdentDataset(args.data_dir, config.sample_pairs(1), keep_in_memory=keep_in_memory, **dataset_kwargs)
@@ -469,20 +510,8 @@ def main():
     val_2_dataset = torch.utils.data.Subset(val_dataset, val_val_indices)
     content_categories = config.content_categories
     style_categories = config.style_categories
-    shared_style_categories = list(set(get_distribution_of_style_classes(config, 0))
-                                   .intersection(get_distribution_of_style_classes(config, 1))
-                                   .intersection(get_distribution_of_style_classes(config, 2))
-                                   .intersection(get_distribution_of_style_classes(config, 3)))
     print("Made datasets.")
-    # train_len = math.floor(0.1*len(dataset))#change
-    # val_len = math.floor(0.4*len(dataset))#change
-    # test_len = math.floor(0.4*len(dataset))#change
 
-    # leftover_len = len(dataset) - train_len - val_len - test_len
-
-    # val_len += leftover_len
-
-    # train_dataset, val_dataset, test_dataset = random_split(dataset, [train_len, val_len, test_len])
     if not args.evaluate:
         train_loader = DataLoader(train_dataset, collate_fn = collate_fn, **dataloader_kwargs)
         train_iterator = InfiniteIterator(train_loader)
@@ -528,7 +557,7 @@ def main():
 
     full_model.to(device)
 
-    # for evaluation, always load saved encoders
+    # for evaluation, always load saved encoders unless using default weights
     if args.evaluate and not args.default_weights:
         path_encoder = os.path.join(args.save_dir, f"encoder_{args.encoder_number}.pt")
         encoder.load_state_dict(torch.load(path_encoder, map_location=device))
@@ -573,11 +602,6 @@ def main():
                 
                 if step % args.full_eval_steps == 1 or step == args.train_steps:
                     full_evaluation(args, val_1_dataset, val_2_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories)
-                    # if len(val_loss_values) >= 5:
-                    #     if val_loss_values[-5] - val_loss_values[-1] < 0.05:
-                    #         stop_flag=True
-                    #         print("Stopping model early")
-
 
                 if step % args.checkpoint_steps == 1 or step == args.train_steps or stop_flag:
                     torch.save(encoder.state_dict(), os.path.join(args.save_dir, f"encoder_{step}.pt"))
@@ -592,10 +616,6 @@ def main():
         print("got val dict")
         test_dict = get_data(test_dataset, encoder, loss_func, dataloader_kwargs, content_categories, style_categories, args=args)
         print("got test dict")
-        # print(val_dict)
-        # print("*************")
-        # print(test_dict)
-
         print(f"<Val Loss>: {np.mean(val_dict['loss_values']):.4f}")
         print(f"<Test Loss>: {np.mean(test_dict['loss_values']):.4f}")
 
