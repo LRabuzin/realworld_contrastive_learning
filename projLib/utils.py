@@ -101,7 +101,7 @@ def balanced_accuracies_boxplot(results, names, title, x_axis_label):
         results_dfs.append(pd.read_csv(result).set_index("metric"))
 
     fig, ax = plt.subplots()
-    bp = ax.boxplot([df.loc["balanced_acc"][1:21] for df in results_dfs], positions=[3,9,15, 21], patch_artist=True, labels=names, widths = 3)
+    bp = ax.boxplot([df.loc["balanced_acc"][1:21] for df in results_dfs], positions=[3 + 6*i for i in range(len(results_dfs))], patch_artist=True, labels=names, widths = 3)
     colors = ["indianred", "green", "blue", "goldenrod"]
     for patch, color in zip(bp['boxes'], colors):
         patch.set_facecolor(color)
